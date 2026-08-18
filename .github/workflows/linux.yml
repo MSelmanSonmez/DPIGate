@@ -1,0 +1,49 @@
+name: Linux
+
+on:
+  push:
+    paths:
+      - "linux/**"
+      - ".github/workflows/linux.yml"
+  pull_request:
+    paths:
+      - "linux/**"
+      - ".github/workflows/linux.yml"
+  workflow_dispatch:
+
+jobs:
+  check:
+    name: check (${{ matrix.image }})
+    runs-on: ubuntu-latest
+    container:
+      image: ${{ matrix.image }}
+    strategy:
+      fail-fast: false
+      matrix:
+        image:
+          - debian:12
+          - ubuntu:24.04
+          - fedora:41
+          - fedora:44
+          - rockylinux:9
+          - alpine:3.20
+          - opensuse/tumbleweed
+          - ghcr.io/void-linux/void-linux:latest-full-x86_64
+          - archlinux:latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Bootstrap bash
+        shell: sh
+        run: |
+          apk add --no-cache bash || \
+          dnf -y install bash || \
+          (apt-get -qq update && apt-get -qq install -y bash) || \
+          zypper -n in bash || \
+          pacman -Sy --noconfirm bash || \
+          xbps-install -Sy bash || \
+          true
+
+      - name: Run install.sh --check-only
+        run: bash linux/install.sh --check-only

@@ -1,298 +1,143 @@
 # GoodByeDPI-Plus
 
-GoodByeDPI-Plus is an enhanced fork of [GoodbyeDPI](https://github.com/ValdikSS/GoodbyeDPI) that adds **per-program DPI bypass filtering** — only the traffic of programs you choose (browsers, Discord, etc.) gets bypass tricks applied, while everything else passes through untouched.
+**Per-program DPI bypass for Windows and Linux.** A fork of
+[GoodbyeDPI](https://github.com/ValdikSS/GoodbyeDPI) that applies bypass tricks
+*only* to the programs you choose — browsers, Discord, whatever you list —
+while every other connection passes through untouched.
 
-It also ships with a one-click installer that sets up a hidden Windows scheduled task so bypass runs automatically at every logon — no console window, no UAC prompt, no manual launch.
+One-click install, a system tray to control it, automatic DNS selection, and a
+filter list you can edit while it runs. The Linux side is a native port of the
+same C engine (NFQUEUE + raw sockets instead of WinDivert), not a wrapper.
 
 ---
 
-## What's new vs. original GoodbyeDPI
+## Demo
 
-| Feature | Original | GoodByeDPI-Plus |
-|---------|----------|-----------------|
+**Windows** — installer, tray menu, DNS switching and the per-program filter list.
+
+![GoodByeDPI-Plus on Windows](gif/windows.gif)
+
+**Linux** — graphical installer, GTK tray, and the same filter list hot-reloading.
+
+![GoodByeDPI-Plus on Linux](gif/linux.gif)
+
+---
+
+## Why this fork
+
+| | Original | GoodByeDPI-Plus |
+|---|---|---|
 | Per-program whitelist | No — all traffic processed | **Yes** via `--only-programs` |
-| Hot-reload of whitelist | N/A | **Yes** — edit `programs.txt` while running, applies in ~2 s |
-| One-click auto-startup | `.cmd` scripts only | **Scheduled task** installer (`install.bat`) |
-| System tray icon | None | **Yes** — right-click to edit whitelist or stop |
+| Hot-reload of the list | — | **Yes** — edits apply in ~2 s, no restart |
+| One-click auto-startup | `.cmd` scripts | **Installer** + hidden logon task |
+| System tray | None | **Yes** — edit filters, switch DNS, toggle, stop |
 | DNS auto-detection | Manual `--dns-addr` | **Yes** — tests 5 servers, picks fastest non-poisoned |
-| Hidden background run | Console window visible | **Hidden** — no taskbar clutter |
-| SNI DPI bypass | Manual `-5`/`-9` flags | **Auto** via `$bypassMode` config |
-| DNS poisoning bypass | `--dns-addr` | Same, with auto-detection |
-
----
-
-## How it works
-
-GoodbyeDPI-Plus uses WinDivert's **FLOW layer** to learn which process owns each network connection. A background thread receives `(5-tuple, PID)` notifications for every new flow, resolves the PID to an executable path, and matches it against the whitelist in `programs.txt`. The result is stored in a thread-safe hash map keyed by 5-tuple.
-
-The main packet loop queries this map for every TCP/UDP packet. If the owning process is **on the whitelist**, normal bypass tricks (fragmentation, fake packets, etc.) are applied. If it is **not**, the packet is reinjected untouched and skipped — zero overhead for that flow.
-
-At startup, a snapshot of already-open connections is taken via `GetExtendedTcpTable` / `GetExtendedUdpTable`, so existing browser tabs are not missed.
-
-DNS redirect (`--dns-addr`) is **exempt** from the per-program gate: it works globally so the system resolver (`svchost.exe`, which is not on your whitelist) can still resolve domains through the redirect. Without this, DNS would be poisoned by the ISP and no bypass trick could help.
-
-A **watcher thread** polls `programs.txt` for mtime changes every 2 seconds. When you edit the file, the whitelist is atomically swapped, the 5-tuple map is cleared, and connections are re-seeded — no restart needed.
+| Hidden background run | Console window visible | **Hidden** |
+| SNI DPI bypass | Manual `-5`/`-9` flags | **Auto** via a config variable |
+| Linux support | Windows only | **Yes** — native NFQUEUE port, same gate |
 
 ---
 
 ## Quick start
 
-1. Download the [latest release](../../releases) and unzip it.
-2. Run **`install.bat`** as administrator.
-3. That's it. GoodByeDPI-Plus is now running in the background and will start automatically on every logon. A **system tray icon** appears near the clock — right-click it to edit the whitelist or stop the service.
+### Windows
 
-To stop and remove it, run **`uninstall.bat`** as administrator.
+1. Download the setup installer from the [latest release](../../releases).
+2. Run the wizard. Tick **Start automatically at logon** if you want it on every boot.
+3. Done — a tray icon appears near the clock. Right-click it to edit the
+   whitelist, switch DNS, or stop.
 
-> Place the folder somewhere permanent before running `install.bat`. The scheduled task points to `src\start.ps1` inside this folder. If you move the folder, run `install.bat` again.
+To remove it: tray icon → **Uninstall**, or **Settings → Apps & features**.
 
----
+> Everything is copied to `C:\Program Files\GoodByeDPI-Plus`, so the downloaded
+> installer can be deleted afterwards. Launching elevates through UAC —
+> `goodbyedpi.exe` needs admin rights to load the WinDivert driver.
 
-## System tray
-
-When `start.ps1` runs (either manually or via the scheduled task), a **system tray icon** appears near the clock. Right-click it to access:
-
-- **DNS: …** — dropdown menu showing all tested DNS servers with response times and status. The currently active server is checkmarked. Click any server to instantly switch (goodbyedpi restarts with the new DNS). Includes an **Auto-detect (re-test)** option to re-run the speed test.
-- **Edit programs.txt** — opens the whitelist in your default text editor; changes hot-reload in ~2 s
-- **Exit** — kills `goodbyedpi.exe` and removes the tray icon
-
-If `goodbyedpi.exe` crashes or exits unexpectedly, the tray icon shows a warning balloon and cleans up automatically.
-
-To disable the tray icon (headless mode), run:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File src\start.ps1 -NoTray
-```
-
-Or set `$enableTray = $false` at the top of `src\start.ps1`.
-
----
-
-## DNS auto-detection
-
-At every launch, `start.ps1` can automatically test multiple DNS servers and pick the **fastest one that returns a non-poisoned response**. This ensures you always get the best DNS redirect without manual tuning.
-
-**How it works:**
-
-1. Sends a DNS query for `discord.com` (a commonly blocked domain) to all candidate servers **in parallel**.
-2. Measures each server's response time.
-3. Discards servers that return a known **ISP block-page IP** (e.g. `195.175.254.*` for Türk Telekom).
-4. Selects the fastest valid server.
-5. Falls back to **Yandex 77.88.8.8:1253** if no server responds correctly.
-
-**Candidate servers:**
-
-| Server | Port | Provider |
-|--------|------|----------|
-| 77.88.8.8 | 1253 | Yandex (alt port) |
-| 77.88.8.8 | 53 | Yandex (standard) |
-| 1.1.1.1 | 53 | Cloudflare |
-| 9.9.9.9 | 53 | Quad9 |
-| 94.140.14.14 | 53 | AdGuard |
-
-To disable auto-detection and use the hardcoded fallback:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File src\start.ps1 -NoDnsDetect
-```
-
-Or set `$autoDetectDns = $false` at the top of `src\start.ps1`.
-
-You can also customize the candidate list, timeout, test domain, and block-page IP ranges in the **Config** section at the top of `src\start.ps1`.
-
----
-
-## Configuration
-
-### Choosing which programs get bypassed
-
-Open `src\programs.txt` in a text editor. One program per line. Lines starting with `#` are comments.
-
-```
-# Browsers
-chrome.exe
-msedge.exe
-firefox.exe
-
-# Discord
-discord.exe
-Vesktop.exe
-```
-
-**Matching rules** (case-insensitive):
-
-- If the entry **contains** a path separator (`\` or `/`), it is matched as a **substring of the full process path**.
-  Example: `Google\Chrome\chrome.exe` matches
-  `C:\Program Files\Google\Chrome\Application\chrome.exe`.
-- If the entry has **no** separator, it is matched against the **file name only** (exact match).
-  Example: `chrome.exe` matches any `chrome.exe`, but `chrome` does not.
-
-Changes take effect within ~2 seconds — no restart needed (hot-reload).
-
-### Adjusting bypass parameters
-
-Edit `src\start.ps1` to change the command-line arguments passed to `goodbyedpi.exe`. By default, DNS redirect parameters are built dynamically from the auto-detection result. The Config section at the top of the file lets you toggle features and customize DNS candidates:
-
-```powershell
-$enableTray      = $true    # System tray icon
-$autoDetectDns   = $true    # Auto-pick fastest non-poisoned DNS
-$dnsTimeoutMs    = 800      # Per-batch DNS test timeout
-$dnsTestDomain   = 'discord.com'
-$blockPageRanges = @('195.175.254.')  # ISP block-page IPs to reject
-$bypassMode      = '--auto-ttl --max-payload'  # SNI DPI bypass tricks
-```
-
-When auto-detection is enabled, the `--dns-addr` / `--dns-port` / `--dnsv6-addr` / `--dnsv6-port` flags are set automatically. When disabled, the fallback (Yandex 77.88.8.8:1253) is used.
-
-The `$bypassMode` variable controls SNI-based DPI bypass tricks applied to whitelisted programs' traffic. The default `--auto-ttl --max-payload` is a minimal working set that bypasses SNI inspection without triggering excessive Cloudflare challenges. You can change it to `-5` (aggressive: adds `--reverse-frag`), `-9` (most aggressive), or `''` (empty — DNS redirect only, for ISPs that only do DNS poisoning). See `goodbyedpi.exe -h` for all options.
-
-If your ISP also does SNI-based DPI blocking (not just DNS poisoning), you can add bypass trick modesets such as `-9`, `-5`, `--native-frag`, etc. See `goodbyedpi.exe -h` for the full list.
-
-> **Note:** Some ISPs do **only** DNS poisoning and have no SNI/TCP DPI blocking — in that case you can set `$bypassMode = ''` (empty) for DNS redirect only. However, many ISPs (including some in Turkey) do **both** DNS poisoning **and** SNI-based DPI blocking, in which case bypass tricks like `--auto-ttl --max-payload` are required. Cloudflare bot verification may appear in `curl` tests but is automatically resolved by real browsers via JavaScript challenge.
-
-### Supported arguments
-
-Run `goodbyedpi.exe -h` for the full, up-to-date list. Key additions in this fork:
-
-```
---only-programs <txtfile>  Apply DPI bypass tricks ONLY to traffic of programs
-                            listed in the text file (one basename or path
-                            substring per line). Other programs' traffic is
-                            left untouched. # comments allowed.
---debug-proc               Print per-program gate decisions (first 300 packets).
-```
-
-All original GoodbyeDPI arguments (`-p`, `-q`, `-r`, `-s`, `-e`, `-f`, `--dns-addr`, `--blacklist`, `-5`..`-9`, etc.) are also supported.
-
----
-
-## How to build from source
-
-### Prerequisites
-
-- [MSYS2](https://www.msys2.org/) with `mingw-w64-x86_64-gcc` installed
-- [WinDivert 2.2.0-A](https://reqrypt.org/download/WinDivert-2.2.0-A.zip) SDK (header + libs)
-
-### Build (x86_64)
-
-Open the **MSYS2 mingw64** terminal and run:
+### Linux
 
 ```bash
-cd src
-make BIT64=1 \
-  WINDIVERTHEADERS=/path/to/WinDivert-2.2.0-A/include \
-  WINDIVERTLIBS=/path/to/WinDivert-2.2.0-A/x64
+git clone https://github.com/SelmanBuilds/GoodByeDPI-Plus.git
+cd GoodByeDPI-Plus/linux
+sudo -v            # refresh the sudo timestamp first — avoids repeated prompts
+./install.sh       # add --start to launch right away
 ```
 
-### Build (x86)
+Then start it from the application menu, or
+`~/.local/share/GoodbyeDPI-Plus/start.sh`. Double-clicking `install.sh` in a file
+manager opens a graphical wizard instead.
 
-```bash
-cd src
-make CPREFIX=i686-w64-mingw32- \
-  WINDIVERTHEADERS=/path/to/WinDivert-2.2.0-A/include \
-  WINDIVERTLIBS=/path/to/WinDivert-2.2.0-A/x86
-```
-
-The resulting `goodbyedpi.exe` will be in `src/`. Copy it along with `WinDivert.dll` and `WinDivert64.sys` (or `WinDivert32.sys`) into the `x86_64/` (or `x86/`) folder.
-
-GitHub Actions CI also builds both architectures automatically on every push — see [.github/workflows/build.yml](.github/workflows/build.yml).
+If anything ever looks wrong:
+`~/.local/share/GoodbyeDPI-Plus/kill.sh` — it always restores connectivity.
 
 ---
 
-## How to check if it works
+## How it works
 
-1. With GoodByeDPI-Plus **running**, try opening a previously-blocked website in a whitelisted browser.
-2. Run `uninstall.bat`, then try the same website again — it should be blocked.
-3. Re-run `install.bat` to start it again.
+GoodbyeDPI-Plus learns **which process owns each connection** and gates the
+bypass on that. On Windows this comes from WinDivert's FLOW layer; on Linux from
+`sock_diag` plus an inode→PID cache over `/proc`. The `(5-tuple → PID → exe)`
+result is cached in a hash map.
 
-### Debug mode
+The packet loop then checks that map for every TCP/UDP packet. On the whitelist →
+bypass tricks (fragmentation, fake packets, TTL games) are applied. Not on it →
+the packet is reinjected untouched, at zero cost. Existing connections are
+seeded at startup, so open browser tabs are not missed, and a watcher thread
+re-reads the filter list ~2 s after you save it.
 
-To verify the per-program gate is working correctly, run `start.ps1` with `--debug-proc` appended. The easiest way is to temporarily edit the `$params` line in `src\start.ps1`:
-
-```powershell
-$params = "--dns-addr $($dns.Addr) --dns-port $($dns.Port) --dnsv6-addr $($dns.V6Addr) --dnsv6-port $($dns.V6Port) --only-programs `"$programsList`" --debug-proc"
-```
-
-Or run goodbyedpi.exe directly:
-
-```powershell
-.\src\x86_64\goodbyedpi.exe --dns-addr 77.88.8.8 --dns-port 1253 --only-programs .\src\programs.txt --debug-proc
-```
-
-This prints `[GATE] PASS` / `[GATE] BLOCK` decisions for the first 300 packets to stdout.
-
-To see DNS auto-detection output, run `start.ps1` from a terminal (not via `install.bat`):
-
-```powershell
-powershell -ExecutionPolicy Bypass -File src\start.ps1 -NoTray
-```
+DNS is handled separately: on Windows `--dns-addr` redirect is exempt from the
+gate so the system resolver still works; on Linux the system resolver's upstream
+is repointed at a clean server when the current one turns out to be poisoned.
 
 ---
 
-## Uninstall
+## Documentation
 
-Run `uninstall.bat` as administrator. This:
-- Removes the scheduled task
-- Kills the tray host (`powershell.exe` running `start.ps1`)
-- Stops the running `goodbyedpi.exe` process
-- Stops the WinDivert driver
+| | |
+|---|---|
+| [**Windows guide**](docs/windows.md) | tray, DNS auto-detection, configuration, filter syntax, building, installer, uninstall |
+| [**Linux guide**](docs/linux.md) | architecture, requirements, install flags, tray, services, troubleshooting |
+
+Added command-line arguments (both platforms):
+
+```
+--only-programs <txtfile>  Apply bypass tricks ONLY to programs listed in the
+                            file (one basename or path substring per line).
+--debug-proc               Print per-program gate decisions.
+```
+
+All original GoodbyeDPI arguments still work. Run `goodbyedpi -h` for the list.
 
 ---
 
-## Project structure
+## Repository layout
 
 ```
-GoodByeDPI-Plus/
-├── install.bat              # One-click installer (calls src/install.ps1)
-├── uninstall.bat            # One-click uninstaller
-├── README.md
-├── LICENSE                  # Apache 2.0
-├── NOTICE                   # Attribution & modified-files notice
-├── .editorconfig
-├── .gitignore
-├── .github/
-│   ├── workflows/build.yml  # CI: auto-build x86 + x86_64
-│   └── ISSUE_TEMPLATE/      # Bug report & feature request templates
-└── src/
-    ├── goodbyedpi.c         # Main packet loop + per-program gate (--only-programs)
-    ├── proctrack.c          # Per-program 5-tuple→PID→exe→whitelist tracker
-    ├── proctrack.h
-    ├── goodbyedpi.h
-    ├── blackwhitelist.c/.h  # Original host-based blacklist
-    ├── dnsredir.c/.h        # DNS redirect logic
-    ├── fakepackets.c/.h     # Fake packet generation
-    ├── service.c/.h         # Windows service helpers
-    ├── ttltrack.c/.h        # TTL tracking
-    ├── utils/               # getline, repl_str, uthash
-    ├── Makefile
-    ├── goodbyedpi-rc.rc     # Windows resource (icon, manifest)
-    ├── icon.ico
-    ├── start.ps1            # Launcher script (DNS redirect + --only-programs)
-    ├── install.ps1          # Scheduled task installer
-    ├── uninstall.ps1        # Scheduled task uninstaller
-    ├── programs.txt         # Per-program whitelist (editable, hot-reloaded)
-    ├── x86_64/              # 64-bit prebuilt binaries
-    │   ├── goodbyedpi.exe
-    │   ├── WinDivert.dll
-    │   └── WinDivert64.sys
-    └── x86/                 # 32-bit prebuilt binaries
-        ├── goodbyedpi.exe
-        ├── WinDivert.dll
-        ├── WinDivert32.sys
-        └── WinDivert64.sys
+windows/   Windows build: goodbyedpi.c + proctrack.c (WinDivert), PowerShell
+           launcher/tray, Inno Setup script, prebuilt x86 and x86_64 binaries
+linux/     Linux port: packet_io_linux.c (NFQUEUE), rawsend_linux.c (raw socket),
+           proctrack_linux.c (sock_diag), checksum.c, install.sh + GTK wizard,
+           tray.py, nftables rules, service files, tests
+docs/      Platform guides and internal design notes
+.github/   CI: Windows x86/x86_64 build, install.sh --check-only on 9 distros
 ```
+
+The bypass sources (`fakepackets.c`, `dnsredir.c`, `ttltrack.c`,
+`blackwhitelist.c`, `utils/`) exist on both sides; `make check-sync` in `linux/`
+detects drift between them.
 
 ---
 
 ## Credits
 
-- **[ValdikSS/GoodbyeDPI](https://github.com/ValdikSS/GoodbyeDPI)** — the original Deep Packet Inspection circumvention utility. This project is a fork of it.
-- **[basil00/WinDivert](https://github.com/basil00/Divert)** — the packet capture/divert library that makes all of this possible.
-- **[keift/goodbyedpi](https://github.com/keift/goodbyedpi)** — inspiration for the one-click startup installer concept.
-
----
+- **[ValdikSS/GoodbyeDPI](https://github.com/ValdikSS/GoodbyeDPI)** — the original DPI circumvention utility this project forks.
+- **[basil00/WinDivert](https://github.com/basil00/Divert)** — the packet capture/divert library behind the Windows build.
+- **[keift/goodbyedpi](https://github.com/keift/goodbyedpi)** — inspiration for the one-click startup installer.
+- **[bol-van/zapret](https://github.com/bol-van/zapret)** — reference for the NFQUEUE + raw-socket + fwmark approach used by the Linux port.
 
 ## License
 
-Licensed under the **Apache License, Version 2.0**. See [LICENSE](LICENSE) and [NOTICE](NOTICE) for details.
+Apache License 2.0 — see [LICENSE](LICENSE) and [NOTICE](NOTICE).
 
-This project is a derivative work of GoodbyeDPI by ValdikSS, also licensed under Apache 2.0.
+The core engine is derived from GoodbyeDPI, which is Apache-2.0. Apache-2.0 code
+cannot be relicensed as MIT without dropping the patent grant and attribution
+obligations that travel with every derivative work, so this fork stays Apache 2.0.

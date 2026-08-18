@@ -1,6 +1,24 @@
 # Build artifacts
 *.o
-src/goodbyedpi.exe
+dist/
+windows/setup/*
+# ...but track the built installer. Note the pattern: a bare "windows/setup/"
+# excludes the directory itself, and git cannot re-include a file from an
+# excluded directory - so the contents are ignored instead, then negated.
+!windows/setup/GoodByeDPI-Plus-*-setup.exe
+windows/goodbyedpi.exe
+
+# Inno Setup's own downloaded installer, if it is kept next to the repo
+innosetup-*.exe
+
+# Linux port build artifacts
+linux/goodbyedpi
+linux/bypass_test
+linux/proctrack_test
+linux/checksum_test
+linux/rawsend_test
+linux/smoke_test
+linux/__pycache__/
 
 # Runtime logs
 debug*.txt
@@ -18,3 +36,17 @@ Desktop.ini
 
 # Internal dev files
 STATUS.md
+
+# make-dist.sh output tarball (written to the repo root)
+/goodbyedpi-plus-linux*.tar.gz
+
+# Python bytecode (anywhere, not just linux/)
+__pycache__/
+*.py[cod]
+
+# More OS cruft / editor + patch leftovers
+.DS_Store
+*.orig
+*.rej
+*~
+*.swp

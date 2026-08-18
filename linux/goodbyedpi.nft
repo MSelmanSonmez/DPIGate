@@ -1,0 +1,93 @@
+#!/usr/bin/env -S nft -f
+#
+# goodbyedpi.nft — NFQUEUE rules for GoodByeDPI-Plus Linux port.
+#
+# Loads into its own table (inet goodbyedpi) — does NOT touch existing rules.
+# Unload: nft delete table inet goodbyedpi
+#
+# Requires:
+#   - nftables >= 0.9.6 (inet family + queue flags)
+#   - Kernel >= 5.10 (NFQUEUE bypass flag, conntrack NOTRACK)
+#
+# Usage:
+#   sudo nft -f goodbyedpi.nft       # load
+#   sudo nft delete table inet goodbyedpi   # unload
+#
+# After loading, start goodbyedpi:
+#   sudo ./goodbyedpi -9 --queue 200
+#
+# The --queue option MUST match queue num below (default: 200).
+
+# If table already exists, delete it first: sudo nft delete table inet goodbyedpi
+
+# Idempotent load: create-if-absent, then delete, then define. The empty-table
+# line is required — without it `delete table` fails with ENOENT on a
+# first-ever load and nft aborts the whole file.
+table inet goodbyedpi {}
+delete table inet goodbyedpi
+
+table inet goodbyedpi {
+
+    chain output {
+        type filter hook output priority mangle + 10; policy accept;
+
+        # 0) Loopback bypass — NEVER queue loopback traffic.
+        #    Critical for systemd-resolved (127.0.0.53): without this, DNS
+        #    redirect changes dst→1.1.1.1, response comes back on external
+        #    interface with restored src=127.0.0.53 → kernel drops as martian.
+        #    Loopback DNS passes through untouched; upstream queries from
+        #    systemd-resolved to external DNS get queued+redirected normally.
+        oifname "lo" accept
+
+        # 1) Fake packets bypass — fwmark 0x40000000 (DPI_DESYNC_FWMARK_DEFAULT)
+        #    Packets sent by goodbyedpi via raw socket carry this mark (SO_MARK).
+        #    Without this rule, fake packets re-enter NFQUEUE → infinite loop.
+        mark & 0x40000000 == 0x40000000 accept
+
+        # 1b) System daemons bypass — never queue root-owned sockets.
+        #     NetworkManager's connectivity check (a plain HTTP GET as root) is
+        #     the reported symptom: mangling that flow makes NM report a
+        #     captive portal. apt / ntp / systemd-resolved likewise gain
+        #     nothing from DPI bypass. User applications are unaffected.
+        meta skuid 0 return
+
+        # 2) TCP 80 + 443 outbound → NFQUEUE
+        #    HTTP + HTTPS traffic for DPI bypass.
+        #    bypass flag: if userspace dies, kernel accepts (no deadlock).
+        tcp dport { 80, 443 } counter queue num 200 bypass
+
+        # 3) UDP 53 outbound → NFQUEUE (DNS redirect)
+        #    Only needed if --dns-addr / --dns-port is used.
+        udp dport 53 counter queue num 200 bypass
+
+        # 4) UDP 443 outbound → REJECT (QUIC/HTTP3 block).
+        #    Rejecting rather than queue+drop is deliberate. A silently
+        #    black-holed QUIC Initial leaves the client with no signal: Firefox
+        #    keeps an HTTP/3 attempt open for minutes (measured: a cold profile
+        #    never finished loading discord.com), because it never learns the
+        #    path is dead. With an ICMP port-unreachable the socket fails
+        #    instantly and the browser falls back to TCP — which is where the
+        #    DPI bypass works. Same page: ~2s.
+        #    goodbyedpi's own -q check stays as a backstop for the iptables
+        #    backend and for packets that predate this rule.
+        #    Loopback is exempt so a local service on UDP 443 still works.
+        oifname != "lo" udp dport 443 counter reject
+    }
+
+    chain input {
+        type filter hook input priority mangle + 10; policy accept;
+
+        # 5) Loopback bypass — NEVER queue loopback traffic (see output chain).
+        iifname "lo" accept
+
+        # 6) Fake packets bypass (inbound direction — for DNS responses etc.)
+        mark & 0x40000000 == 0x40000000 accept
+
+        # 6) TCP 80 + 443 inbound → NFQUEUE
+        #    Needed for: passive DPI RST drop, SYN+ACK TTL tracking, HTTP redirect detection.
+        tcp sport { 80, 443 } counter queue num 200 bypass
+
+        # 7) UDP 53 inbound → NFQUEUE (DNS response redirect)
+        udp sport 53 counter queue num 200 bypass
+    }
+}

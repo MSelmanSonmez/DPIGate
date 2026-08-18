@@ -6,30 +6,58 @@ This project is a derivative work of GoodbyeDPI by ValdikSS
 Apache License, Version 2.0.
 
 The following files were modified from the original GoodbyeDPI source:
-  - src/goodbyedpi.c     — added --only-programs / --debug-proc flags
-                           and per-program gate logic
-  - src/Makefile          — added -liphlpapi for GetExtendedTcpTable
+  - windows/goodbyedpi.c      — added --only-programs / --debug-proc flags
+                                and per-program gate logic
+  - windows/Makefile          — added -liphlpapi for GetExtendedTcpTable
 
 The following files were added:
-  - src/proctrack.c       — per-program 5-tuple→PID→exe→whitelist tracker
-                            with WinDivert FLOW layer integration, hot-reload
-                            watcher thread, and connection seeding
-  - src/proctrack.h       — public API for the per-program tracker
-  - src/programs.txt      — default whitelist (editable)
-  - src/start.ps1         — PowerShell launcher with DNS redirect config
-  - src/install.ps1       — Start Menu shortcut installer with tray launch
-  - src/uninstall.ps1     — removes shortcut, scheduled tasks, and processes
-  - install.bat           — batch wrapper for install.ps1
-  - uninstall.bat         — batch wrapper for uninstall.ps1
-  - .github/              — GitHub Actions CI workflow and issue templates
-  - README.md             — project documentation
+  - windows/proctrack.c       — per-program 5-tuple→PID→exe→whitelist tracker
+                                with WinDivert FLOW layer integration, hot-reload
+                                watcher thread, and connection seeding
+  - windows/proctrack.h       — public API for the per-program tracker
+  - windows/programs.txt      — default whitelist (editable)
+  - windows/start.ps1         — PowerShell launcher with DNS redirect config
+  - windows/install.ps1       — Start Menu shortcut installer with tray launch
+  - windows/uninstall.ps1     — removes shortcut, scheduled tasks, and processes
+  - windows/setup.iss         — Inno Setup installer script
+  - .github/                  — GitHub Actions CI workflow and issue templates
+  - README.md                 — project documentation
+
+
+The Linux port lives in the linux/ directory. The engine files below are
+ports of the original GoodbyeDPI sources (same algorithms, WinDivert calls
+replaced with NFQUEUE/raw-socket equivalents):
+
+  - linux/goodbyedpi.c     — port of windows/goodbyedpi.c
+  - linux/checksum.c       — replaces WinDivert's checksum helper; has no
+                             windows/ counterpart (on Windows the checksum
+                             work is done by WinDivertHelperCalcChecksums)
+  - linux/blackwhitelist.c — port of windows/blackwhitelist.c
+  - linux/ttltrack.c       — port of windows/ttltrack.c
+  - linux/fakepackets.c    — port of windows/fakepackets.c
+  - linux/dnsredir.c       — port of windows/dnsredir.c
+
+Added for the Linux port:
+
+  - linux/packet_io_linux.c/.h — NFQUEUE capture/modify/reinject
+  - linux/proctrack_linux.c/.h  — per-program 5-tuple→PID tracker (sock_diag)
+  - linux/rawsend_linux.c/.h    — raw-socket fake packet sender
+  - linux/utils/getline.c/.h, repl_str.c/.h, uthash.h — bundled utility sources
+  - linux/start.sh, kill.sh, reaper.sh, tray-launcher.sh, tray.py,
+    dns_detect.py, installer-gui.py, install.sh, uninstall.sh, vm-diag.sh,
+    lib/platform.sh, lib/wizard-zenity.sh, scripts/ — launchers, the
+    graphical setup wizard, installer/uninstaller, diagnostics and the
+    cross-distro portability layer
+  - docs/linux-port-notes.md, docs/vm-diagnostics.md — Linux design and
+    diagnostics notes
 
 The startup-script concept was inspired by keift/goodbyedpi
 (https://github.com/keift/goodbyedpi).
 
 WinDivert (https://github.com/basil00/Divert) by basil00 is bundled
 as pre-built binaries (WinDivert.dll, WinDivert*.sys) under the
-x86/ and x86_64/ directories and is used under its LGPL/MIT license.
+windows/x86/ and windows/x86_64/ directories and is used under its
+LGPL/MIT license.
 
 Copyright 2026 SelmanBuilds
 

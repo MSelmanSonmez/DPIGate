@@ -1,0 +1,33 @@
+# goodbyedpi.service — GoodByeDPI-Plus systemd user unit
+#
+# Installed to: ~/.config/systemd/user/goodbyedpi.service
+# Enable:  systemctl --user enable --now goodbyedpi
+# Disable: systemctl --user disable --now goodbyedpi
+#
+# Runs goodbyedpi headless (--no-tray). The tray icon is launched
+# separately via ~/.config/autostart/goodbyedpi-tray.desktop so that
+# the DPI bypass works independently of the GUI session.
+#
+# NOTE: goodbyedpi needs root (NFQUEUE + raw socket). Two options:
+#   1. setcap cap_net_raw,cap_net_admin+ep on the binary (install.sh does this)
+#      → user service works without root
+#   2. Use a system service instead (User=root) — see install.sh --system
+#
+# Firewall rules (nftables or iptables) are loaded by start.sh and torn
+# down by ExecStop via kill.sh (see lib/platform.sh for the backend
+# abstraction). kill.sh also stops the tray, so no ExecStopPost is needed.
+
+[Unit]
+Description=GoodByeDPI-Plus — DPI bypass with per-program filtering
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=%h/.local/share/GoodbyeDPI-Plus/start.sh --no-tray
+Environment=PLAT_NOPROMPT=1
+ExecStop=%h/.local/share/GoodbyeDPI-Plus/kill.sh
+
+[Install]
+WantedBy=default.target

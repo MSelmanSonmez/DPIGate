@@ -1,0 +1,23 @@
+# Shell scripts, Python and Linux config must keep LF endings — a CRLF shebang
+# breaks execution on Linux.
+*.sh            text eol=lf
+*.py            text eol=lf
+*.nft           text eol=lf
+*.service       text eol=lf
+linux/ProgramFilters            text eol=lf
+linux/service/openrc/goodbyedpi text eol=lf
+linux/service/runit/goodbyedpi/run    text eol=lf
+linux/service/runit/goodbyedpi/finish text eol=lf
+
+# Windows-side scripts keep CRLF.
+*.ps1           text eol=crlf
+*.bat           text eol=crlf
+*.iss           text eol=crlf
+
+# Binaries and demo media.
+*.gif           binary
+*.png           binary
+*.ico           binary
+*.exe           binary
+*.dll           binary
+*.sys           binary

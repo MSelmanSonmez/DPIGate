@@ -1,0 +1,62 @@
+# GoodByeDPI-Plus per-program whitelist (Linux)
+# One program per line. Lines starting with # are comments.
+# Matching is case-insensitive and a process matches when ANY of its
+# identities matches — the exe path, the command line, or the kernel task
+# name — so a sandboxed or just-upgraded binary is still recognised:
+#   - Entries WITH a path separator (/) are matched as a
+#     substring of the process exe path AND its cmdline.
+#   - Entries WITHOUT a separator are matched against the exe basename
+#     (exact), the task name /proc/<pid>/comm (exact), AND the full
+#     cmdline (substring). Example: firefox, vesktop
+# Parent processes are checked too (4 levels), which covers Electron and
+# Chromium helper processes that do the actual networking.
+
+# Browsers — basename exact match (case-insensitive)
+chrome
+google-chrome
+google-chrome-stable
+chromium
+chromium-browser
+firefox
+firefox-esr
+opera
+brave
+brave-browser
+vivaldi
+vivaldi-stable
+epiphany
+falkon
+konqueror
+waterfox
+midori
+iridium
+ungoogled-chromium
+edge
+microsoft-edge
+
+# Discord / chat — Electron apps.
+# .deb install: binary is /usr/share/discord/Discord → basename "discord" works.
+# Snap/Flatpak: proctrack may not read /proc/*/exe due to sandboxing.
+#              → use "Bypass All Traffic" toggle in tray menu instead.
+discord
+discord-canary
+discord-ptb
+/usr/share/discord/
+/opt/discord/
+# Vesktop — the basename "vesktop" matches both native binaries
+# (exe basename = vesktop) and Electron-packaged versions
+# (cmdline contains /usr/lib/vesktop/ or similar).
+vesktop
+/usr/lib/vesktop/
+/opt/vesktop/
+/app/bin/vesktop
+dev.vencord.Vesktop
+# Generic Electron catch-all — gates any Electron-packaged Discord client
+# whose exe basename isn't "vesktop" (e.g. unofficial/rebranded builds) on
+# real hardware where proctrack has full /proc/*/exe visibility.
+electron
+telegram-desktop
+Signal
+slack
+
+# Other apps (add your own)

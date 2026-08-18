@@ -1,0 +1,4 @@
+#!/bin/sh
+exec 2>&1
+export GDPI_PROGRAMS=/etc/GoodbyeDPI-Plus/ProgramFilters
+exec /usr/local/lib/GoodbyeDPI-Plus/start.sh --no-tray --foreground

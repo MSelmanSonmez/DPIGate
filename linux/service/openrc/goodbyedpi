@@ -1,0 +1,16 @@
+#!/sbin/openrc-run
+description="GoodByeDPI-Plus — DPI bypass with per-program filtering"
+: ${GDPI_DIR:=/usr/local/lib/GoodbyeDPI-Plus}
+: ${GDPI_PROGRAMS:=/etc/GoodbyeDPI-Plus/ProgramFilters}
+depend() { need net; after firewall; }
+start() {
+    ebegin "Starting goodbyedpi"
+    GDPI_PROGRAMS="$GDPI_PROGRAMS" "$GDPI_DIR/start.sh" --no-tray
+    eend $?
+}
+stop() {
+    ebegin "Stopping goodbyedpi"
+    "$GDPI_DIR/kill.sh" --proc
+    "$GDPI_DIR/kill.sh" --nft
+    eend 0
+}
