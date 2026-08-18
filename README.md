@@ -32,7 +32,7 @@ same C engine (NFQUEUE + raw sockets instead of WinDivert), not a wrapper.
 
 ## Why this fork
 
-| | Original | GoodByeDPI-Plus |
+| Feature | Original | GoodByeDPI-Plus |
 |---|---|---|
 | Per-program whitelist | No — all traffic processed | **Yes** via `--only-programs` |
 | Hot-reload of the list | — | **Yes** — edits apply in ~2 s, no restart |
