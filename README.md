@@ -70,6 +70,10 @@ git clone https://github.com/SelmanBuilds/GoodByeDPI-Plus.git
 cd GoodByeDPI-Plus/linux
 ```
 
+Or download `goodbyedpi-plus-<version>-linux.tar.gz` from the
+[latest release](../../releases/latest), unpack it, and `cd goodbyedpi-plus` —
+same contents, no git needed.
+
 **Graphical installer.** Double-click `install.sh` in your file manager, or run
 it with no terminal attached, and the GTK wizard (`installer-gui.py`) opens:
 **Welcome → License → Components → Ready → Installing → Finished**, with a live
