@@ -146,6 +146,13 @@ All original GoodbyeDPI arguments (`-p`, `-q`, `-r`, `-s`, `-e`, `-f`,
 2. Tray icon → **Exit**, then reload — it should be blocked again.
 3. Start it again from the Start Menu shortcut.
 
+> **Not in a NAT'd virtual machine.** If the Windows guest runs behind
+> VirtualBox NAT (or any user-mode NAT), the host's NAT stack terminates the
+> guest's TCP connection and regenerates it, so the fragmentation, TTL and
+> decoy packets never reach the ISP's DPI as sent. Nothing is bypassed and the
+> test proves nothing. Shut the VM down and set Adapter 1 to a **Bridged
+> Adapter** before testing.
+
 ### Debug mode
 
 ```powershell

@@ -103,6 +103,20 @@ If anything ever looks wrong:
 > check on nine of them — but they have not been verified in practice. Reports
 > from other distros are welcome.
 
+### Virtual machines: use a bridged adapter, not NAT
+
+**The bypass does not work in a VM with NAT networking**, on either platform.
+It is not a bug that can be fixed here: a NAT stack (VirtualBox's slirp,
+and user-mode NAT in general) terminates the guest's TCP connection and
+regenerates the stream on the host side, so the fragmentation, TTL and decoy
+packets that defeat the DPI never leave the host as the guest sent them. The
+DPI sees a perfectly ordinary connection and blocks it as usual.
+
+Shut the VM down and switch Adapter 1 to a **Bridged Adapter**, so the guest
+talks to the network directly. On Linux, `start.sh` detects VirtualBox NAT and
+refuses to start rather than leave you debugging a bypass that cannot work;
+`--force-nat` overrides the check if you want to run it anyway.
+
 ---
 
 ## How it works
@@ -151,7 +165,7 @@ line, `#` for comments.
 
 ## Documentation
 
-| | |
+| Guide | Covers |
 |---|---|
 | [**Windows guide**](docs/windows.md) | tray, DNS auto-detection, configuration, filter syntax, building, installer, uninstall |
 | [**Linux guide**](docs/linux.md) | architecture, requirements, install flags, tray, services, troubleshooting |
