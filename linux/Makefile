@@ -16,7 +16,7 @@ PKGS       = libnetfilter_queue libmnl libnfnetlink
 PKG_CFLAGS = $(shell pkg-config --cflags $(PKGS) 2>/dev/null)
 PKG_LIBS   = $(shell pkg-config --libs   $(PKGS) 2>/dev/null)
 CFLAGS  += -std=gnu99 -O2 -Wall -Wextra -Wpedantic -fPIE \
-          -D_DEFAULT_SOURCE -D_FORTIFY_SOURCE=2 -fstack-protector $(PKG_CFLAGS)
+          -D_GNU_SOURCE -D_DEFAULT_SOURCE -D_FORTIFY_SOURCE=2 -fstack-protector $(PKG_CFLAGS)
 LDFLAGS += -pie
 LIBS     = $(if $(PKG_LIBS),$(PKG_LIBS),-lnetfilter_queue -lnfnetlink -lmnl) -lpthread -ldl
 
