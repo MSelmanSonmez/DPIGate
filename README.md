@@ -250,9 +250,8 @@ GoodByeDPI-Plus/
 If this project is useful to you, you can support its development through
 [**GitHub Sponsors**](https://github.com/sponsors/SelmanBuilds).
 
-Starring the repository, reporting bugs, and telling us which distribution you
-ran it on help just as much — especially reports from distros outside the
-tested three.
+Starring the repository and [reporting bugs](../../issues/new/choose) help just
+as much — especially reports from distributions outside the tested three.
 
 ---
 
@@ -275,9 +274,11 @@ warranty and liability disclaimer.
 ## Credits
 
 - **[ValdikSS/GoodbyeDPI](https://github.com/ValdikSS/GoodbyeDPI)** — the original DPI circumvention utility this project forks.
-- **[basil00/WinDivert](https://github.com/basil00/Divert)** — the packet capture/divert library behind the Windows build.
+- **[basil00/WinDivert](https://github.com/basil00/WinDivert)** — the packet capture/divert library behind the Windows build.
 - **[keift/goodbyedpi](https://github.com/keift/goodbyedpi)** — inspiration for the one-click startup installer.
 - **[bol-van/zapret](https://github.com/bol-van/zapret)** — reference for the NFQUEUE + raw-socket + fwmark approach used by the Linux port.
+
+---
 
 ## License
 
