@@ -1,5 +1,12 @@
 # GoodByeDPI-Plus
 
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue)](LICENSE)
+[![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux-lightgrey)](#quick-start)
+[![Release](https://img.shields.io/github/v/release/SelmanBuilds/GoodByeDPI-Plus?label=release&color=success)](../../releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/SelmanBuilds/GoodByeDPI-Plus/total?color=brightgreen)](../../releases)
+[![Windows build](https://img.shields.io/github/actions/workflow/status/SelmanBuilds/GoodByeDPI-Plus/build.yml?label=windows%20build)](../../actions/workflows/build.yml)
+[![Linux CI](https://img.shields.io/github/actions/workflow/status/SelmanBuilds/GoodByeDPI-Plus/linux.yml?label=linux%20ci)](../../actions/workflows/linux.yml)
+
 **Per-program DPI bypass for Windows and Linux.** A fork of
 [GoodbyeDPI](https://github.com/ValdikSS/GoodbyeDPI) that applies bypass tricks
 *only* to the programs you choose — browsers, Discord, whatever you list —
@@ -42,8 +49,8 @@ same C engine (NFQUEUE + raw sockets instead of WinDivert), not a wrapper.
 
 ### Windows
 
-1. Download the setup installer from the [latest release](../../releases).
-2. Run the wizard. Tick **Start automatically at logon** if you want it on every boot.
+1. Download the setup installer from the [latest release](../../releases/latest).
+2. Run the installer. Tick **Start automatically at logon** if you want it on every boot.
 3. Done — a tray icon appears near the clock. Right-click it to edit the
    whitelist, switch DNS, or stop.
 
@@ -55,19 +62,42 @@ To remove it: tray icon → **Uninstall**, or **Settings → Apps & features**.
 
 ### Linux
 
+There is no prebuilt package — the binary is compiled on your machine, so start
+by getting the sources:
+
 ```bash
 git clone https://github.com/SelmanBuilds/GoodByeDPI-Plus.git
 cd GoodByeDPI-Plus/linux
+```
+
+**Graphical installer.** Double-click `install.sh` in your file manager, or run
+it with no terminal attached, and the GTK wizard (`installer-gui.py`) opens:
+**Welcome → License → Components → Ready → Installing → Finished**, with a live
+install log and a "start after install" checkbox. Force it explicitly with:
+
+```bash
+./install.sh --gui
+```
+
+**Terminal installer.** The same steps without a GUI — the wizard runs this
+underneath, so the two cannot drift apart:
+
+```bash
 sudo -v            # refresh the sudo timestamp first — avoids repeated prompts
 ./install.sh       # add --start to launch right away
 ```
 
-Then start it from the application menu, or
-`~/.local/share/GoodbyeDPI-Plus/start.sh`. Double-clicking `install.sh` in a file
-manager opens a graphical wizard instead.
+Either way, start it afterwards from the application menu or with
+`~/.local/share/GoodbyeDPI-Plus/start.sh`.
 
 If anything ever looks wrong:
 `~/.local/share/GoodbyeDPI-Plus/kill.sh` — it always restores connectivity.
+
+> **Tested distributions.** Hands-on testing has been done on **Fedora, Ubuntu
+> and Arch** only. The installer probes capabilities rather than package names,
+> so other distributions are expected to work — CI runs its dependency and build
+> check on nine of them — but they have not been verified in practice. Reports
+> from other distros are welcome.
 
 ---
 
@@ -87,6 +117,31 @@ re-reads the filter list ~2 s after you save it.
 DNS is handled separately: on Windows `--dns-addr` redirect is exempt from the
 gate so the system resolver still works; on Linux the system resolver's upstream
 is repointed at a clean server when the current one turns out to be poisoned.
+
+---
+
+## The system tray
+
+Everything you need day to day is in the tray icon's right-click menu — you
+should not have to touch a config file or a terminal.
+
+| Menu item | What it does |
+|---|---|
+| **DNS: …** | Every candidate DNS server with its measured response time; the active one is marked. Click one to switch — the engine restarts with it in a second or two |
+| **Auto-detect (re-test)** | Runs the DNS speed/poisoning test again and picks the best server. Useful after changing networks |
+| **Edit Program Filters** | Opens your filter list in a text editor. Add or remove a program, save, and it applies in ~2 seconds — no restart |
+| **Bypass All Traffic** | Toggle. On = ignore the filter list and bypass everything (useful when an app cannot be matched, e.g. a Flatpak/Snap sandbox). Off = only the listed programs |
+| **Auto Start** | Toggle. Registers or removes the startup entry — a hidden scheduled task on Windows, an autostart entry plus a systemd user unit on Linux |
+| **Uninstall** | Runs the uninstaller |
+| **Exit** | Stops the engine and removes the icon. On Linux it also unloads the firewall rules, restoring normal networking |
+
+Windows shows a warning balloon if the engine exits unexpectedly; on Linux a
+watchdog checks every 2 seconds and tears the firewall rules down if the daemon
+dies, so a crash can never leave you without a working connection.
+
+Filter list locations: `C:\Program Files\GoodByeDPI-Plus\programs.txt` on
+Windows, `~/.config/GoodbyeDPI-Plus/ProgramFilters` on Linux. One program per
+line, `#` for comments.
 
 ---
 
@@ -112,18 +167,90 @@ All original GoodbyeDPI arguments still work. Run `goodbyedpi -h` for the list.
 ## Repository layout
 
 ```
-windows/   Windows build: goodbyedpi.c + proctrack.c (WinDivert), PowerShell
-           launcher/tray, Inno Setup script, prebuilt x86 and x86_64 binaries
-linux/     Linux port: packet_io_linux.c (NFQUEUE), rawsend_linux.c (raw socket),
-           proctrack_linux.c (sock_diag), checksum.c, install.sh + GTK wizard,
-           tray.py, nftables rules, service files, tests
-docs/      Platform guides and internal design notes
-.github/   CI: Windows x86/x86_64 build, install.sh --check-only on 9 distros
+GoodByeDPI-Plus/
+├── README.md
+├── LICENSE                     # Apache 2.0
+├── NOTICE                      # Attribution & modified-files notice
+├── docs/
+│   ├── windows.md              # Windows guide
+│   ├── linux.md                # Linux guide
+│   ├── linux-port-notes.md     # Internal: original port design notes
+│   └── vm-diagnostics.md       # Internal: maintainer VM runbook
+├── gif/                        # Demo recordings
+├── .github/workflows/
+│   ├── build.yml               # CI: Windows x86 + x86_64 build
+│   └── linux.yml               # CI: install.sh --check-only across 9 distros
+├── windows/
+│   ├── goodbyedpi.c            # Packet loop + per-program gate (--only-programs)
+│   ├── proctrack.c/.h          # 5-tuple → PID → exe → whitelist tracker
+│   ├── blackwhitelist.c/.h     # Host-based blacklist
+│   ├── dnsredir.c/.h           # DNS redirect
+│   ├── fakepackets.c/.h        # Fake packet generation
+│   ├── ttltrack.c/.h           # TTL tracking
+│   ├── service.c/.h            # Windows service helpers
+│   ├── utils/                  # getline, repl_str, uthash
+│   ├── Makefile
+│   ├── start.ps1               # Launcher: DNS detection + tray + gate
+│   ├── install.ps1             # Scheduled task installer
+│   ├── uninstall.ps1           # Scheduled task uninstaller
+│   ├── setup.iss               # Inno Setup installer script
+│   ├── programs.txt            # Filter list (editable, hot-reloaded)
+│   ├── x86_64/                 # 64-bit binaries + WinDivert
+│   └── x86/                    # 32-bit binaries + WinDivert
+└── linux/
+    ├── goodbyedpi.c/.h         # Packet loop (pio_* API instead of WinDivert)
+    ├── proctrack_linux.c/.h    # Gate: /proc/net + sock_diag + inode→PID cache
+    ├── packet_io.h             # Packet I/O abstraction
+    ├── packet_io_linux.c       # NFQUEUE backend (libnetfilter_queue)
+    ├── rawsend_linux.c/.h      # Raw-socket fake packet injection + fwmark
+    ├── checksum.c/.h           # IP/TCP/UDP checksums + parsing (RFC 1071)
+    ├── fakepackets.c dnsredir.c ttltrack.c blackwhitelist.c utils/
+    │                           # Ported bypass sources, shared with windows/
+    ├── Makefile                # Build + check-sync/sync + test targets
+    ├── install.sh              # Installer (text + graphical)
+    ├── installer-gui.py        # GTK install wizard
+    ├── uninstall.sh
+    ├── start.sh                # Launcher: DNS check, firewall, daemon, tray
+    ├── kill.sh                 # Emergency stop / teardown
+    ├── reaper.sh               # Tears daemon + rules down if the tray is killed
+    ├── tray.py                 # GTK tray
+    ├── tray-launcher.sh        # Autostart wrapper (--check for diagnostics)
+    ├── dns_detect.py           # DNS candidate testing / poisoning detection
+    ├── goodbyedpi.nft          # nftables rules (table inet goodbyedpi)
+    ├── goodbyedpi.service      # systemd unit
+    ├── ProgramFilters          # Filter list (editable, hot-reloaded)
+    ├── lib/                    # platform.sh portability layer, zenity wizard
+    ├── service/                # OpenRC and runit service definitions
+    ├── scripts/                # check-sync, sync, make-dist, settings-test
+    └── *_test.c                # checksum / proctrack / rawsend / bypass / smoke
 ```
 
-The bypass sources (`fakepackets.c`, `dnsredir.c`, `ttltrack.c`,
-`blackwhitelist.c`, `utils/`) exist on both sides; `make check-sync` in `linux/`
-detects drift between them.
+---
+
+## Support
+
+If this project is useful to you, you can support its development through
+[**GitHub Sponsors**](https://github.com/sponsors/SelmanBuilds).
+
+Starring the repository, reporting bugs, and telling us which distribution you
+ran it on help just as much — especially reports from distros outside the
+tested three.
+
+---
+
+## Disclaimer
+
+This software is provided for lawful use, for research, and for restoring access
+to legitimate services. Circumventing network filtering may be restricted or
+prohibited in some jurisdictions, and it may also violate the terms of service of
+your network or internet provider.
+
+**All legal responsibility arising from the use of this software rests entirely
+with the person using it.** The authors and contributors provide it "as is",
+without warranty of any kind, and accept no liability for any use, misuse, or
+consequence of its use. Check your local laws before running it, and only use it
+on networks you are authorised to use. See [LICENSE](LICENSE) for the full
+warranty and liability disclaimer.
 
 ---
 
