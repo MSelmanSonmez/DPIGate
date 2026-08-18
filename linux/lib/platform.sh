@@ -93,6 +93,51 @@ _plat_print_manual_recipe() {
     fi
 }
 
+# _plat_dnf_enable_el_repos — enable EPEL + CRB on RHEL-family hosts.
+#
+# libmnl-devel and libnfnetlink-devel live in CRB (named PowerTools on EL8) and
+# libnetfilter_queue-devel comes from EPEL. Neither repository is enabled by
+# default on Rocky, Alma, CentOS Stream, RHEL or Oracle Linux, which is why a
+# plain "dnf install" there fails with nothing to match for the three -devel
+# packages. Fedora carries all of them in its main repository and is skipped.
+#
+# Every step is best-effort: an offline or subscription-less host should still
+# get as far as it can, and plat_deps_check has the final say on whether the
+# capabilities are actually present.
+_plat_dnf_enable_el_repos() {
+    local id like repo
+    id="$(plat_distro)"
+    like="$(plat_distro_like)"
+
+    case "$id" in
+        fedora) return 0 ;;
+        rhel|centos|rocky|almalinux|ol|oracle|scientific) ;;
+        *)
+            case " $like " in
+                *rhel*|*centos*) ;;
+                *) return 0 ;;
+            esac
+            ;;
+    esac
+
+    plat_run_root dnf install -y dnf-plugins-core || true
+    plat_run_root dnf install -y epel-release || true
+
+    # Repository name differs per release and per rebuild; the first one that
+    # exists wins. dnf exits non-zero for a name it does not know.
+    for repo in crb powertools \
+                codeready-builder-for-rhel-9-x86_64-rpms \
+                codeready-builder-for-rhel-8-x86_64-rpms \
+                ol9_codeready_builder ol8_codeready_builder; do
+        if plat_run_root dnf config-manager --set-enabled "$repo" >/dev/null 2>&1; then
+            echo "[platform] enabled repository: $repo" >&2
+            break
+        fi
+    done
+    return 0
+}
+
+
 # plat_deps_install ROLE   ROLE = build|runtime|all
 plat_deps_install() {
     local role="${1:-all}"
@@ -132,7 +177,7 @@ plat_deps_install() {
             run_opt="libnotify py3-gobject3 gtk+3.0 zenity polkit"
             ;;
         xbps)
-            build_req="gcc make pkg-config libnetfilter_queue-devel libnfnetlink-devel libmnl-devel"
+            build_req="gcc make pkgconf libnetfilter_queue-devel libnfnetlink-devel libmnl-devel"
             run_req="bash nftables iptables libcap-progs"
             run_opt="libnotify python3-gobject gtk+3 libayatana-appindicator zenity polkit"
             ;;
@@ -160,6 +205,10 @@ plat_deps_install() {
         rc=0
         plat_run_root yum install -y "$pre" || rc=$?
         if [ "$rc" -eq 2 ]; then return 2; fi
+    fi
+
+    if [ "$mgr" = "dnf" ]; then
+        _plat_dnf_enable_el_repos
     fi
 
     local pkgs=""

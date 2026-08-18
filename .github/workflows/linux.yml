@@ -28,7 +28,6 @@ jobs:
           - rockylinux:9
           - alpine:3.20
           - opensuse/tumbleweed
-          - ghcr.io/void-linux/void-linux:latest-full-x86_64
           - archlinux:latest
     steps:
       - name: Checkout repository
@@ -42,8 +41,33 @@ jobs:
           (apt-get -qq update && apt-get -qq install -y bash) || \
           zypper -n in bash || \
           pacman -Sy --noconfirm bash || \
-          xbps-install -Sy bash || \
           true
 
       - name: Run install.sh --check-only
         run: bash linux/install.sh --check-only
+
+  # Void is driven through plain docker instead of a job-level container.
+  # A container job runs every `uses:` action with the runner's own Node
+  # binary mounted into the image, and that Node needs libstdc++.so.6, which
+  # the Void images do not ship — so actions/checkout dies before any step of
+  # ours runs. Checking out on the host and mounting the tree sidesteps Node
+  # entirely; the check itself is identical to the matrix above.
+  check-void:
+    name: check (void-linux)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run install.sh --check-only in a Void container
+        run: |
+          docker run --rm -v "$PWD:/src" -w /src \
+            ghcr.io/void-linux/void-linux:latest-full-x86_64 \
+            sh -c '
+              set -e
+              # Void requires xbps itself to be current before anything else
+              # can be installed from a freshly synced repository.
+              xbps-install -Syu xbps || true
+              xbps-install -Sy bash
+              bash linux/install.sh --check-only
+            '
