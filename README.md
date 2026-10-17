@@ -250,16 +250,6 @@ DPIGate/
 
 ---
 
-## Support
-
-If this project is useful to you, you can support its development through
-[**GitHub Sponsors**](https://github.com/sponsors/MSelmanSonmez).
-
-Starring the repository and [reporting bugs](../../issues/new/choose) help just
-as much — especially reports from distributions outside the tested three.
-
----
-
 ## Disclaimer
 
 This software is provided for lawful use, for research, and for restoring access
