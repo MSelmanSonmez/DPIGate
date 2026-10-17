@@ -1,4 +1,4 @@
-# <img src="docs/icon.png" alt="" width="40" height="40"> DPIGate
+# <img src="docs/icon.png" alt="" width="40" height="40" align="top"> DPIGate
 
 <!-- shields.io cannot read a private repo; version is static and CI uses GitHub's own badges until the repo is public. -->
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue)](LICENSE)

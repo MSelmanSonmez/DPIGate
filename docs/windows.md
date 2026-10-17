@@ -179,7 +179,7 @@ powershell -ExecutionPolicy Bypass -File windows\start.ps1 -NoTray
 ### Prerequisites
 
 - [MSYS2](https://www.msys2.org/) with `mingw-w64-x86_64-gcc`
-- [WinDivert 2.2.0-A](https://reqrypt.org/download/WinDivert-2.2.0-A.zip) SDK (headers + libs)
+- [WinDivert 2.2.0-A](https://github.com/basil00/WinDivert/releases/download/v2.2.0/WinDivert-2.2.0-A.zip) SDK (headers + libs)
 
 ### Build
 
