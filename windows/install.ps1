@@ -254,7 +254,7 @@ $shortcut.WorkingDirectory = $scriptDir
 if (Test-Path -LiteralPath $iconPath) {
     $shortcut.IconLocation = $iconPath
 }
-$shortcut.Description = 'GoodByeDPI-Plus - DPI bypass with per-program filtering'
+$shortcut.Description = 'DPIGate - DPI bypass with per-program filtering'
 $shortcut.Save()
 # Must come after .Save(): WScript.Shell rewrites the whole .lnk there, so
 # setting the bit first would simply be overwritten.
@@ -271,7 +271,7 @@ if (Get-Process -Name 'goodbyedpi' -ErrorAction SilentlyContinue) {
 }
 
 if ($running) {
-    [System.Windows.MessageBox]::Show("GoodByeDPI-Plus is now running. Look for its icon in the system tray (near the clock).`r`n`r`nStart Menu shortcut created.`r`n`r`nTo enable auto-start at logon, right-click the tray icon and check 'Auto Start'.`r`n`r`nLong live freedom!", 'GoodByeDPI-Plus', 'OK', 'Information')
+    [System.Windows.MessageBox]::Show("DPIGate is now running. Look for its icon in the system tray (near the clock).`r`n`r`nStart Menu shortcut created.`r`n`r`nTo enable auto-start at logon, right-click the tray icon and check 'Auto Start'.`r`n`r`nLong live freedom!", 'DPIGate', 'OK', 'Information')
 } else {
-    [System.Windows.MessageBox]::Show("GoodByeDPI-Plus was installed but the process is not running.`r`n`r`nStart it manually from the Start Menu shortcut.`r`n`r`nIf it still fails, make sure you run as administrator.", 'GoodByeDPI-Plus', 'OK', 'Warning')
+    [System.Windows.MessageBox]::Show("DPIGate was installed but the process is not running.`r`n`r`nStart it manually from the Start Menu shortcut.`r`n`r`nIf it still fails, make sure you run as administrator.", 'DPIGate', 'OK', 'Warning')
 }

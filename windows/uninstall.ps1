@@ -115,5 +115,5 @@ if (-not $Silent) {
     # shows no UI at all and Setup waits for this process, so there is no
     # reason to make it wait on WPF loading too.
     Add-Type -AssemblyName PresentationFramework
-    [System.Windows.MessageBox]::Show("GoodByeDPI-Plus has been successfully uninstalled.`r`n`r`nThe internet is freer now!", 'GoodByeDPI-Plus', 'OK', 'Information')
+    [System.Windows.MessageBox]::Show("DPIGate has been successfully uninstalled.`r`n`r`nThe internet is freer now!", 'DPIGate', 'OK', 'Information')
 }

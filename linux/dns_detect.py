@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-dns_detect.py — DNS auto-detection helper for GoodByeDPI-Plus (Linux port).
+dns_detect.py — DNS auto-detection helper for DPIGate (Linux port).
 
 Tests candidate DNS servers in parallel (non-blocking UDP), picks the
 fastest one that returns a non-poisoned A record. Falls back to

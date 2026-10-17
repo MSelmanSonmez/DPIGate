@@ -1,5 +1,5 @@
 #!/bin/bash
-# tray-launcher.sh — Launches the GoodByeDPI-Plus tray icon independently.
+# tray-launcher.sh — Launches the DPIGate tray icon independently.
 # Designed to be called from ~/.config/autostart/ at login.
 #
 # Reads the running goodbyedpi PID from the PID file, sets up the
@@ -55,7 +55,7 @@ DESKTOP_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/autostart/goodbyedpi-tray.deskto
 # ── Check mode: verify all Auto Start components ──────────────────────────
 if [ "${1:-}" = "--check" ]; then
     echo "============================================"
-    echo " GoodByeDPI-Plus — Auto Start Diagnostics"
+    echo " DPIGate — Auto Start Diagnostics"
     echo "============================================"
     echo ""
 
@@ -158,7 +158,7 @@ fi
 if ! command -v python3 >/dev/null 2>&1 || \
    ! python3 -c 'import gi; gi.require_version("Gtk", "3.0")' >/dev/null 2>&1; then
     echo "[tray-launcher] tray unavailable (python3-gi/GTK3 missing) — bypass NOT started" >&2
-    notify-send -a "GoodByeDPI-Plus" -i dialog-warning "GoodByeDPI-Plus" \
+    notify-send -a "DPIGate" -i dialog-warning "DPIGate" \
         "Tray unavailable (python3-gi/GTK3 missing) — bypass not started" 2>/dev/null || true
     exit 1
 fi
@@ -185,12 +185,12 @@ if [ "$GDPI_PID" -le 0 ]; then
     plat_root_acquire || _root_rc=$?
     if [ "$_root_rc" -eq 2 ]; then
         echo "[tray-launcher] password cancelled — bypass not started" >> "$PLAT_LOG" 2>/dev/null || true
-        notify-send -a "GoodByeDPI-Plus" -i dialog-warning "GoodByeDPI-Plus" \
+        notify-send -a "DPIGate" -i dialog-warning "DPIGate" \
             "Bypass not started — password prompt cancelled" 2>/dev/null || true
         _start_pid=0
     elif [ "$_root_rc" -ne 0 ]; then
         echo "[tray-launcher] WARN: cannot obtain root — firewall rules will not load" >> "$PLAT_LOG" 2>/dev/null || true
-        notify-send -a "GoodByeDPI-Plus" -i dialog-warning "GoodByeDPI-Plus" \
+        notify-send -a "DPIGate" -i dialog-warning "DPIGate" \
             "Cannot obtain root — firewall rules not loaded" 2>/dev/null || true
         SUDO_PASSWORD="$SUDO_PASSWORD" "$APP_DIR/start.sh" --no-tray >/dev/null 2>&1 &
         _start_pid=$!
@@ -245,7 +245,7 @@ if [ "$GDPI_PID" -le 0 ]; then
         _fw="$(cat "$DATA_DIR/fw_state" 2>/dev/null || true)"
         if [ "$_fw" != "ok" ] && [ "$_fw" != "skipped" ]; then
             echo "[tray-launcher] WARN: firewall rules not loaded (fw_state=${_fw:-unknown}) — bypass INACTIVE" >> "$PLAT_LOG" 2>/dev/null || true
-            notify-send -a "GoodByeDPI-Plus" -i dialog-error -u critical "GoodByeDPI-Plus" \
+            notify-send -a "DPIGate" -i dialog-error -u critical "DPIGate" \
                 "Firewall rules not loaded — bypass is INACTIVE. Run start.sh from a terminal to enter your password." 2>/dev/null || true
         fi
     fi

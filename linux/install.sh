@@ -1,5 +1,5 @@
 #!/bin/bash
-# install.sh — GoodByeDPI-Plus Linux installer (install.ps1 counterpart)
+# install.sh — DPIGate Linux installer (install.ps1 counterpart)
 #
 # Builds the binary (if needed), copies files to XDG dirs, loads the
 # firewall rules (nftables or iptables), installs a service definition
@@ -156,7 +156,7 @@ _run_gui_wizard() {
     done
 
     # 4. Nothing can show anything. Say so where the user will see it.
-    notify-send -a "GoodByeDPI-Plus" -i dialog-error "GoodByeDPI-Plus" \
+    notify-send -a "DPIGate" -i dialog-error "DPIGate" \
         "No graphical installer available. Open a terminal and run: ./install.sh" 2>/dev/null || true
     echo "ERROR: no GUI toolkit (python3-gi/zenity) and no terminal emulator found." >&2
     echo "       Run ./install.sh from a terminal instead." >&2
@@ -187,7 +187,7 @@ if [ "$(id -u)" -ne 0 ]; then
     plat_root_acquire || _root_rc=$?
     if [ "$_root_rc" -eq 2 ]; then
         echo "[install] Password prompt cancelled. Install aborted - nothing was changed." >&2
-        notify-send -a "GoodByeDPI-Plus" -i dialog-warning "GoodByeDPI-Plus" \
+        notify-send -a "DPIGate" -i dialog-warning "DPIGate" \
             "Install cancelled — password prompt was cancelled" 2>/dev/null || true
         exit 1
     fi
@@ -209,7 +209,7 @@ if [ "$ASSUME_DEPS" -ne 1 ] && ! plat_deps_check; then
     plat_deps_install all || _deps_rc=$?
     if [ "$_deps_rc" -eq 2 ]; then
         echo "[install] Password prompt cancelled. Install aborted - nothing was changed." >&2
-        notify-send -a "GoodByeDPI-Plus" -i dialog-warning "GoodByeDPI-Plus" \
+        notify-send -a "DPIGate" -i dialog-warning "DPIGate" \
             "Install cancelled — password prompt was cancelled" 2>/dev/null || true
         exit 1
     fi
@@ -312,7 +312,7 @@ plat_run_root sh -c 'setcap "$1" "$2"; rc=$?; rm -f /etc/sudoers.d/goodbyedpi 2>
         sh cap_net_raw,cap_net_admin+ep "$DATA_DIR/goodbyedpi" || _cap_rc=$?
 if [ "$_cap_rc" -eq 2 ]; then
     echo "[install] Password prompt cancelled. Install aborted." >&2
-    notify-send -a "GoodByeDPI-Plus" -i dialog-warning "GoodByeDPI-Plus" \
+    notify-send -a "DPIGate" -i dialog-warning "DPIGate" \
         "Install cancelled — password prompt was cancelled" 2>/dev/null || true
     exit 1
 fi
@@ -340,7 +340,7 @@ else
     _fw_rc=$?
     if [ "$_fw_rc" -eq 2 ]; then
         echo "[install] Password prompt cancelled. Install aborted." >&2
-        notify-send -a "GoodByeDPI-Plus" -i dialog-warning "GoodByeDPI-Plus" \
+        notify-send -a "DPIGate" -i dialog-warning "DPIGate" \
             "Install cancelled — password prompt was cancelled" 2>/dev/null || true
         exit 1
     fi
@@ -371,7 +371,7 @@ if [ "$SYSTEM_SERVICE" -eq 1 ]; then
     ' sh "$SCRIPT_DIR" || _sys_rc=$?
     if [ "$_sys_rc" -eq 2 ]; then
         echo "[install] Password prompt cancelled. Install aborted." >&2
-        notify-send -a "GoodByeDPI-Plus" -i dialog-warning "GoodByeDPI-Plus" \
+        notify-send -a "DPIGate" -i dialog-warning "DPIGate" \
             "Install cancelled — password prompt was cancelled" 2>/dev/null || true
         exit 1
     fi
@@ -383,7 +383,7 @@ if [ "$SYSTEM_SERVICE" -eq 1 ]; then
         PLAT_SERVICE_SYSTEM=1 plat_service_enable || _ena_rc=$?
         if [ "$_ena_rc" -eq 2 ]; then
             echo "[install] Password prompt cancelled. Install aborted." >&2
-            notify-send -a "GoodByeDPI-Plus" -i dialog-warning "GoodByeDPI-Plus" \
+            notify-send -a "DPIGate" -i dialog-warning "DPIGate" \
                 "Install cancelled — password prompt was cancelled" 2>/dev/null || true
             exit 1
         fi
@@ -425,7 +425,7 @@ if [ "$DO_SHORTCUT" -eq 1 ]; then
     cat > "$APPS_DIR/goodbyedpi-plus.desktop" <<DESKTOP_EOF
 [Desktop Entry]
 Type=Application
-Name=GoodByeDPI-Plus
+Name=DPIGate
 Comment=DPI bypass with per-program filtering
 Exec=$DATA_DIR/start.sh
 Icon=$DESKTOP_ICON
@@ -452,7 +452,7 @@ if [ "$DO_AUTOSTART" -eq 1 ]; then
     cat > "$AUTOSTART_DIR/goodbyedpi-tray.desktop" <<AUTOSTART_EOF
 [Desktop Entry]
 Type=Application
-Name=GoodByeDPI-Plus Tray
+Name=DPIGate Tray
 Comment=DPI bypass system tray icon
 Exec=$DATA_DIR/tray-launcher.sh
 Icon=$DESKTOP_ICON
@@ -474,13 +474,13 @@ if [ "$DO_START" -eq 1 ]; then
     SUDO_PASSWORD="${SUDO_PASSWORD:-}" "$DATA_DIR/start.sh"
 else
     echo "" >&2
-    echo "Done. Launch GoodByeDPI-Plus from your application menu." >&2
+    echo "Done. Launch DPIGate from your application menu." >&2
     echo "Or run: $DATA_DIR/start.sh" >&2
 fi
 
 # ── Notify ────────────────────────────────────────────────────────────────────
-notify-send -a "GoodByeDPI-Plus" -i "$DATA_DIR/icon.png" \
-    "GoodByeDPI-Plus" "Installed. Launch from application menu." 2>/dev/null || true
+notify-send -a "DPIGate" -i "$DATA_DIR/icon.png" \
+    "DPIGate" "Installed. Launch from application menu." 2>/dev/null || true
 
 # Machine-readable last line: the wizard's progress page keys its success
 # banner off this, so a truncated/killed run can never look successful.

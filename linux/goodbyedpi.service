@@ -1,4 +1,4 @@
-# goodbyedpi.service — GoodByeDPI-Plus systemd user unit
+# goodbyedpi.service — DPIGate systemd user unit
 #
 # Installed to: ~/.config/systemd/user/goodbyedpi.service
 # Enable:  systemctl --user enable --now goodbyedpi
@@ -18,7 +18,7 @@
 # abstraction). kill.sh also stops the tray, so no ExecStopPost is needed.
 
 [Unit]
-Description=GoodByeDPI-Plus — DPI bypass with per-program filtering
+Description=DPIGate — DPI bypass with per-program filtering
 After=network-online.target
 Wants=network-online.target
 

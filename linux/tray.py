@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-tray.py — System tray icon for GoodByeDPI-Plus (Linux port).
+tray.py — System tray icon for DPIGate (Linux port).
 
 Indicator backend, in order of preference (see the fallback chain below):
   1. AyatanaAppIndicator3   2. AppIndicator3
@@ -559,7 +559,7 @@ def toggle_service(enable: bool):
             desktop_content = (
                 "[Desktop Entry]\n"
                 "Type=Application\n"
-                "Name=GoodByeDPI-Plus Tray\n"
+                "Name=DPIGate Tray\n"
                 "Comment=DPI bypass system tray icon\n"
                 f"Exec={TRAY_LAUNCHER_SH}\n"
                 f"Icon={GDPI_ICON if GDPI_ICON and os.path.exists(GDPI_ICON) else 'network-server'}\n"
@@ -730,8 +730,8 @@ def show_notify(msg, icon=None):
             icon = GDPI_ICON
     icon_arg = icon if (icon and ("/" not in icon or os.path.exists(icon))) else "dialog-information"
     try:
-        subprocess.run(["notify-send", "-a", "GoodByeDPI-Plus", "-i", icon_arg,
-                        "GoodByeDPI-Plus", msg],
+        subprocess.run(["notify-send", "-a", "DPIGate", "-i", icon_arg,
+                        "DPIGate", msg],
                        stderr=subprocess.DEVNULL)
     except OSError:
         pass
@@ -746,7 +746,7 @@ def on_uninstall(item):
     if not os.path.exists(UNINSTALL_SH):
         show_notify("uninstall.sh not found", "dialog-warning")
         return
-    show_notify("Uninstalling — this will remove all GoodByeDPI-Plus files")
+    show_notify("Uninstalling — this will remove all DPIGate files")
     global _shutting_down
     _shutting_down = True
     try:
@@ -806,7 +806,7 @@ def check_alive():
     # ufw/nftables.service reload) flushing our rules. Checked every 15th
     # tick (~30s at the 2s timer interval below) to keep the subprocess
     # cost low; this is the only mechanism that survives a ruleset flush
-    # from outside GoodbyeDPI-Plus.
+    # from outside DPIGate.
     _watchdog_tick += 1
     if _watchdog_tick % 15 == 0:
         rc, _out = _plat("fw-is-loaded", noprompt=True)

@@ -5,7 +5,7 @@ windows/setup/*
 # ...but track the built installer. Note the pattern: a bare "windows/setup/"
 # excludes the directory itself, and git cannot re-include a file from an
 # excluded directory - so the contents are ignored instead, then negated.
-!windows/setup/GoodByeDPI-Plus-*-setup.exe
+!windows/setup/DPIGate-*-setup.exe
 windows/goodbyedpi.exe
 
 # Inno Setup's own downloaded installer, if it is kept next to the repo

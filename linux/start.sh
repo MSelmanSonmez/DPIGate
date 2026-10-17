@@ -1,5 +1,5 @@
 #!/bin/bash
-# start.sh — GoodByeDPI-Plus Linux launcher (start.ps1 counterpart)
+# start.sh — DPIGate Linux launcher (start.ps1 counterpart)
 #
 # Kills existing instances, runs DNS auto-detect, loads firewall rules
 # (nftables or iptables, see lib/platform.sh), starts goodbyedpi (root),
@@ -58,7 +58,7 @@ plat_password_unexport
 # failure is indistinguishable from "nothing happened".
 die() {
     echo "ERROR: $*" >&2
-    notify-send -a "GoodByeDPI-Plus" -i dialog-error "GoodByeDPI-Plus" "$*" 2>/dev/null || true
+    notify-send -a "DPIGate" -i dialog-error "DPIGate" "$*" 2>/dev/null || true
     exit 1
 }
 
@@ -225,7 +225,7 @@ fi
 # Refuse duplicate start unless --restart is set.
 if [ "${GDPI_RESTART:-0}" -eq 0 ] && [ -n "$(plat_gdpi_pids 2>/dev/null)" ]; then
     echo "[start] goodbyedpi is already running. Stop it with: $APP_DIR/kill.sh" >&2
-    notify-send -a "GoodByeDPI-Plus" -i "${ICON_PATH:-network-server}" "GoodByeDPI-Plus" \
+    notify-send -a "DPIGate" -i "${ICON_PATH:-network-server}" "DPIGate" \
         "Already running — click Exit in the tray to stop." 2>/dev/null || true
     exit 0
 fi
@@ -297,7 +297,7 @@ case "$DEFAULT_GW" in
             echo "[start]        the NAT stack before reaching the ISP." >&2
             echo "[start]        Switch the VM network to 'Bridged Adapter' in" >&2
             echo "[start]        VirtualBox settings, or override with --force-nat." >&2
-            notify-send -a "GoodByeDPI-Plus" -i dialog-error "GoodByeDPI-Plus" \
+            notify-send -a "DPIGate" -i dialog-error "DPIGate" \
                 "VirtualBox NAT detected — bypass cannot work. Switch to Bridged Adapter." 2>/dev/null || true
             exit 1
         else
@@ -469,7 +469,7 @@ if [ "$BYPASS_ALL" -eq 0 ]; then
     if ! _has_entries "$PROGRAMS_LIST"; then
         # Loud, but purely informational: the mode is NOT changed.
         echo "[start] WARN: ProgramFilters is empty - per-program mode bypasses nothing" >&2
-        notify-send -a "GoodByeDPI-Plus" -i "${ICON_PATH:-network-server}" "GoodByeDPI-Plus" \
+        notify-send -a "DPIGate" -i "${ICON_PATH:-network-server}" "DPIGate" \
             "ProgramFilters is empty - no traffic is being bypassed" 2>/dev/null || true
     fi
 fi

@@ -1,6 +1,6 @@
 #!/usr/bin/env -S nft -f
 #
-# goodbyedpi.nft — NFQUEUE rules for GoodByeDPI-Plus Linux port.
+# goodbyedpi.nft — NFQUEUE rules for DPIGate Linux port.
 #
 # Loads into its own table (inet goodbyedpi) — does NOT touch existing rules.
 # Unload: nft delete table inet goodbyedpi

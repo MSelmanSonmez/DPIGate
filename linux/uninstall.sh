@@ -1,5 +1,5 @@
 #!/bin/bash
-# uninstall.sh — GoodByeDPI-Plus Linux uninstaller (uninstall.ps1 counterpart)
+# uninstall.sh — DPIGate Linux uninstaller (uninstall.ps1 counterpart)
 #
 # Stops goodbyedpi, removes firewall rules, deletes ALL files including
 # user config (ProgramFilters), disables service. Leaves nothing behind.
@@ -48,7 +48,7 @@ if [ "$(id -u)" -ne 0 ]; then
             # Cancelling the dialog means "do not uninstall" - it must NOT
             # proceed to delete every file and leave the firewall rules loaded.
             echo "[uninstall] Uninstall cancelled — the password prompt was cancelled. Nothing was removed." >&2
-            notify-send -a "GoodByeDPI-Plus" -i dialog-warning "GoodByeDPI-Plus" \
+            notify-send -a "DPIGate" -i dialog-warning "DPIGate" \
                 "Uninstall cancelled — password prompt was cancelled" 2>/dev/null || true
             exit 1
         fi
@@ -81,7 +81,7 @@ plat_kill_cmdline "tray.py" || true
 # dialog must never produce.
 _svc_cancel() {
     echo "[uninstall] Uninstall cancelled — the password prompt was cancelled. Files were kept." >&2
-    notify-send -a "GoodByeDPI-Plus" -i dialog-warning "GoodByeDPI-Plus" \
+    notify-send -a "DPIGate" -i dialog-warning "DPIGate" \
         "Uninstall cancelled — password prompt was cancelled" 2>/dev/null || true
     exit 1
 }
@@ -131,6 +131,6 @@ rm -rf "$CONFIG_DIR"
 echo "  Removed config: $CONFIG_DIR"
 
 # ── Notify ────────────────────────────────────────────────────────────────────
-notify-send -a "GoodByeDPI-Plus" -i dialog-warning "GoodByeDPI-Plus" "Uninstalled." 2>/dev/null || true
+notify-send -a "DPIGate" -i dialog-warning "DPIGate" "Uninstalled." 2>/dev/null || true
 
 echo "[uninstall] complete."

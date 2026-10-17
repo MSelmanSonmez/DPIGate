@@ -1,4 +1,4 @@
-# GoodByeDPI-Plus per-program whitelist (Linux)
+# DPIGate per-program whitelist (Linux)
 # One program per line. Lines starting with # are comments.
 # Matching is case-insensitive and a process matches when ANY of its
 # identities matches — the exe path, the command line, or the kernel task

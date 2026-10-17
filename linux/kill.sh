@@ -57,7 +57,7 @@ if [ "$KILL_NFT" -eq 1 ] || [ "$KILL_PROC" -eq 1 ]; then
         plat_root_acquire || _acq_rc=$?
         if [ "$_acq_rc" -eq 2 ]; then
             echo "[kill] ERROR: Kill cancelled — the password prompt was cancelled. Nothing was changed." >&2
-            notify-send -a "GoodByeDPI-Plus" -i dialog-warning "GoodByeDPI-Plus" \
+            notify-send -a "DPIGate" -i dialog-warning "DPIGate" \
                 "Kill cancelled — password prompt was cancelled" 2>/dev/null || true
             exit 1
         fi
@@ -76,7 +76,7 @@ if [ "$KILL_NFT" -eq 1 ]; then
     if [ "$_fw_rc" -eq 2 ]; then
         # User declined the prompt - abort BEFORE touching the daemon.
         echo "[kill] ERROR: Kill cancelled — the password prompt was cancelled. Nothing was changed." >&2
-        notify-send -a "GoodByeDPI-Plus" -i dialog-warning "GoodByeDPI-Plus" \
+        notify-send -a "DPIGate" -i dialog-warning "DPIGate" \
             "Kill cancelled — password prompt was cancelled" 2>/dev/null || true
         exit 1
     fi
@@ -108,7 +108,7 @@ if [ "$KILL_PROC" -eq 1 ]; then
         plat_run_root kill -TERM "$_p" 2>/dev/null || _krc=$?
         if [ "$_krc" -eq 2 ]; then
             echo "[kill] ERROR: Kill cancelled — the password prompt was cancelled." >&2
-            notify-send -a "GoodByeDPI-Plus" -i dialog-warning "GoodByeDPI-Plus" \
+            notify-send -a "DPIGate" -i dialog-warning "DPIGate" \
                 "Kill cancelled — password prompt was cancelled" 2>/dev/null || true
             exit 1
         fi
@@ -139,7 +139,7 @@ if [ -f "$DATA_DIR/dns_override" ] && command -v resolvectl >/dev/null 2>&1; the
         plat_run_root resolvectl revert "$_ovr_if" >/dev/null 2>&1 || _dns_rc=$?
         if [ "$_dns_rc" -eq 2 ]; then
             echo "[kill] ERROR: Kill cancelled — the password prompt was cancelled." >&2
-            notify-send -a "GoodByeDPI-Plus" -i dialog-warning "GoodByeDPI-Plus" \
+            notify-send -a "DPIGate" -i dialog-warning "DPIGate" \
                 "Kill cancelled — password prompt was cancelled" 2>/dev/null || true
             exit 1
         fi

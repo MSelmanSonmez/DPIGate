@@ -455,7 +455,7 @@ int main(int argc, char *argv[]) {
     unsigned int hdr_value_len;
 
     printf(
-        "GoodByeDPI-Plus " GOODBYEDPI_PLUS_VERSION " (linux)"
+        "DPIGate " GOODBYEDPI_PLUS_VERSION " (linux)"
         " (engine: GoodbyeDPI " GOODBYEDPI_VERSION ")\n"
         "Passive DPI blocker and Active DPI circumvention utility\n"
         "https://github.com/ValdikSS/GoodbyeDPI\n\n"

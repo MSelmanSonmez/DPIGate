@@ -142,7 +142,7 @@ All original GoodbyeDPI arguments (`-p`, `-q`, `-r`, `-s`, `-e`, `-f`,
 
 ## Checking that it works
 
-1. With GoodByeDPI-Plus **running**, open a previously blocked site in a whitelisted browser.
+1. With DPIGate **running**, open a previously blocked site in a whitelisted browser.
 2. Tray icon → **Exit**, then reload — it should be blocked again.
 3. Start it again from the Start Menu shortcut.
 
@@ -213,7 +213,7 @@ The Inno Setup script is `windows\setup.iss`:
 1. Install [Inno Setup 6.3+](https://jrsoftware.org/isinfo.php) — the script uses
    `ArchitecturesInstallIn64BitMode=x64compatible`, which older 6.x rejects.
 2. Run `iscc windows\setup.iss` from the repo root.
-3. Output: `windows\setup\GoodByeDPI-Plus-2.0.0-setup.exe`.
+3. Output: `windows\setup\DPIGate-2.0.0-setup.exe`.
 
 The installer ships the prebuilt `x86\` and `x86_64\` binaries, the PowerShell
 scripts and `programs.txt` — which is kept on upgrade, since it is your editable

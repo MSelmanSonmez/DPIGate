@@ -1,4 +1,4 @@
-# linux/Makefile — GoodByeDPI-Plus Linux port
+# linux/Makefile — DPIGate Linux port
 #
 # Build:    make
 # Drift:   make check-sync

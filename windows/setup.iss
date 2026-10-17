@@ -1,11 +1,11 @@
-; GoodByeDPI-Plus - Inno Setup script
+; DPIGate - Inno Setup script
 ;
 ; Builds a classic Next -> Next -> Finish installer for the Windows side.
 ; Compile with Inno Setup 6 (iscc.exe) from the repo root:
 ;
 ;   iscc windows\setup.iss
 ;
-; Output lands in windows\setup\GoodByeDPI-Plus-2.0.0-setup.exe - OutputDir
+; Output lands in windows\setup\DPIGate-2.0.0-setup.exe - OutputDir
 ; below is relative to this .iss file's own directory, so "setup" means
 ; windows\setup, next to this script.
 ;
@@ -24,20 +24,20 @@
 ; Fixed upgrade identity - generated once, must never change across
 ; releases or Windows will treat every build as an unrelated install.
 AppId={{5D915276-0BDE-4B2F-B10D-D59243FD02CF}
-AppName=GoodByeDPI-Plus
+AppName=DPIGate
 AppVersion=2.0.0
-AppPublisher=SelmanBuilds
-AppPublisherURL=https://github.com/SelmanBuilds/GoodByeDPI-Plus
-AppSupportURL=https://github.com/SelmanBuilds/GoodByeDPI-Plus/issues
-AppUpdatesURL=https://github.com/SelmanBuilds/GoodByeDPI-Plus/releases
-UninstallDisplayName=GoodByeDPI-Plus 2.0.0
+AppPublisher=Selman Sönmez
+AppPublisherURL=https://github.com/MSelmanSonmez/DPIGate
+AppSupportURL=https://github.com/MSelmanSonmez/DPIGate/issues
+AppUpdatesURL=https://github.com/MSelmanSonmez/DPIGate/releases
+UninstallDisplayName=DPIGate 2.0.0
 ; File-version metadata for setup.exe itself. Without it the produced
 ; installer has a blank Details tab in Explorer, which users and reputation
 ; systems alike read as a bad sign.
 VersionInfoVersion=2.0.0.0
-VersionInfoCompany=SelmanBuilds
-VersionInfoDescription=GoodByeDPI-Plus Setup
-VersionInfoProductName=GoodByeDPI-Plus
+VersionInfoCompany=Selman Sönmez
+VersionInfoDescription=DPIGate Setup
+VersionInfoProductName=DPIGate
 ; goodbyedpi.exe loads the WinDivert kernel driver - this cannot run as a
 ; standard user, so both install and uninstall require admin.
 PrivilegesRequired=admin
@@ -48,14 +48,14 @@ Compression=lzma2/max
 SolidCompression=yes
 SetupIconFile=icon.ico
 UninstallDisplayIcon={app}\icon.ico
-OutputBaseFilename=GoodByeDPI-Plus-2.0.0-setup
+OutputBaseFilename=DPIGate-2.0.0-setup
 OutputDir=setup
 LicenseFile=..\LICENSE
 ArchitecturesInstallIn64BitMode=x64compatible
 
 [Tasks]
 Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Additional shortcuts:"; Flags: unchecked
-Name: "autostart"; Description: "Start GoodByeDPI-Plus automatically at logon"; GroupDescription: "Startup:"
+Name: "autostart"; Description: "Start DPIGate automatically at logon"; GroupDescription: "Startup:"
 
 [Files]
 ; Explicit allowlist - this, not anything clever, is what keeps the

@@ -1,5 +1,5 @@
 #!/bin/bash
-# make-dist.sh — build a source-only distribution tarball for GoodByeDPI-Plus.
+# make-dist.sh — build a source-only distribution tarball for DPIGate.
 #
 # The tarball contains everything needed to build + install on a fresh
 # Linux Mint / Debian / Fedora / Arch box EXCEPT prebuilt artifacts:

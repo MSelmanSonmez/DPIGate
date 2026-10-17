@@ -1,5 +1,5 @@
 #!/bin/bash
-# vm-diag.sh — VM diagnostics tool for GoodByeDPI-Plus (Bug 2: discord.com/Vesktop
+# vm-diag.sh — VM diagnostics tool for DPIGate (Bug 2: discord.com/Vesktop
 # unreachable, Bug 3: --bypass-all triggers "captive portal" + no internet under
 # NetworkManager).
 #

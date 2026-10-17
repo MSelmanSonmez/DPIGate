@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-installer-gui.py — graphical setup wizard for GoodByeDPI-Plus (Linux).
+installer-gui.py — graphical setup wizard for DPIGate (Linux).
 
 Windows-style Next → Next → Finish flow built on Gtk.Assistant (the same
 GTK3/PyGObject stack tray.py already requires — no new dependency):
@@ -38,7 +38,7 @@ import gi
 gi.require_version("Gtk", "3.0")
 from gi.repository import Gtk, GLib, GdkPixbuf, Gdk, Pango  # noqa: E402
 
-APP_TITLE = "GoodByeDPI-Plus"
+APP_TITLE = "DPIGate"
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
@@ -84,7 +84,7 @@ def _read_license(script_dir: str) -> str:
         except OSError:
             continue
     return ("LICENSE file not found next to the installer.\n"
-            "GoodByeDPI-Plus is distributed under the Apache License 2.0.")
+            "DPIGate is distributed under the Apache License 2.0.")
 
 
 # install.sh milestones → progress bar fraction. Anything unmatched just
@@ -181,7 +181,7 @@ class Wizard:
         head.set_xalign(0)
         box.pack_start(head, False, False, 0)
 
-        intro = Gtk.Label(label="This wizard installs GoodByeDPI-Plus, a DPI bypass with\n"
+        intro = Gtk.Label(label="This wizard installs DPIGate, a DPI bypass with\n"
             "per-program filtering, on this computer.\n\n"
             "Click Next to continue.")
         intro.set_xalign(0)
@@ -250,7 +250,7 @@ class Wizard:
             label="Install a system-wide service (advanced)")
         self.chk_service.set_active("--system" in self.presets)
         self.chk_launch = Gtk.CheckButton(
-            label="Launch GoodByeDPI-Plus when setup finishes")
+            label="Launch DPIGate when setup finishes")
         self.chk_launch.set_active(True)
 
         for w in (self.chk_build, self.chk_shortcut, self.chk_autostart,
@@ -557,13 +557,13 @@ class Wizard:
         self.asst.set_page_complete(self.page_progress, True)
 
         if ok:
-            msg = "GoodByeDPI-Plus has been installed successfully."
+            msg = "DPIGate has been installed successfully."
             if not self.saw_result_ok and "--check-only" not in self.child_extra_args:
                 msg += "\n" + "Note: the installer did not report a completion marker."
             # Same condition on_close() launches under: a --check-only test
             # walk must not promise a launch that will not happen.
             if self.chk_launch.get_active() and self._will_launch():
-                msg += "\n\n" + "GoodByeDPI-Plus will start when you click Finish."
+                msg += "\n\n" + "DPIGate will start when you click Finish."
             self.lbl_done.set_markup(
                 "<span size='large' weight='bold'>%s</span>\n\n%s"
                 % (GLib.markup_escape_text("Setup complete"),

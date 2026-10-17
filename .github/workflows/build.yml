@@ -1,4 +1,4 @@
-name: Build GoodByeDPI-Plus
+name: Build DPIGate
 
 on:
   push:

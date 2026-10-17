@@ -19,7 +19,7 @@ wizard_zenity_main() {
     local installer="$1"; shift
     local presets=("$@")
     local script_dir; script_dir="$(cd "$(dirname "$installer")" && pwd)"
-    local title="GoodByeDPI-Plus Setup"
+    local title="DPIGate Setup"
     local icon="$script_dir/icon.png"
     local rc=0
 
@@ -29,7 +29,7 @@ wizard_zenity_main() {
         --icon-name=network-server \
         --ok-label="Next" \
         --cancel-label="Cancel" \
-        --text="This wizard installs GoodByeDPI-Plus, a DPI bypass with per-program filtering, on this computer.\n\nClick Next to continue." \
+        --text="This wizard installs DPIGate, a DPI bypass with per-program filtering, on this computer.\n\nClick Next to continue." \
         2>/dev/null || rc=$?
     [ "$rc" -eq 0 ] || return 1
 
@@ -122,7 +122,7 @@ wizard_zenity_main() {
     if [ "$install_rc" = "0" ]; then
         zenity --info --title="$title" --width=460 \
             --ok-label="Finish" \
-            --text="GoodByeDPI-Plus has been installed successfully." 2>/dev/null || true
+            --text="DPIGate has been installed successfully." 2>/dev/null || true
         rm -f "$logfile" "$logfile.rc"
         if [ "$do_launch" = "1" ] && [ -x "$data_dir/start.sh" ]; then
             ( cd "$data_dir" && setsid "$data_dir/start.sh" >/dev/null 2>&1 & ) || true

@@ -1,4 +1,4 @@
-# GoodByeDPI-Plus per-program whitelist
+# DPIGate per-program whitelist
 # One program per line. Lines starting with # are comments.
 # Matching is case-insensitive:
 #   - Entries WITH a path separator (\ or /) are matched as a

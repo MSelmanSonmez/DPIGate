@@ -1,11 +1,11 @@
-# GoodByeDPI-Plus
+# DPIGate
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux-lightgrey)](#quick-start)
-[![Release](https://img.shields.io/github/v/release/SelmanBuilds/GoodByeDPI-Plus?label=release&color=success)](../../releases/latest)
-[![Downloads](https://img.shields.io/github/downloads/SelmanBuilds/GoodByeDPI-Plus/total?color=brightgreen)](../../releases)
-[![Windows build](https://img.shields.io/github/actions/workflow/status/SelmanBuilds/GoodByeDPI-Plus/build.yml?label=windows%20build)](../../actions/workflows/build.yml)
-[![Linux CI](https://img.shields.io/github/actions/workflow/status/SelmanBuilds/GoodByeDPI-Plus/linux.yml?label=linux%20ci)](../../actions/workflows/linux.yml)
+[![Release](https://img.shields.io/github/v/release/MSelmanSonmez/DPIGate?label=release&color=success)](../../releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/MSelmanSonmez/DPIGate/total?color=brightgreen)](../../releases)
+[![Windows build](https://img.shields.io/github/actions/workflow/status/MSelmanSonmez/DPIGate/build.yml?label=windows%20build)](../../actions/workflows/build.yml)
+[![Linux CI](https://img.shields.io/github/actions/workflow/status/MSelmanSonmez/DPIGate/linux.yml?label=linux%20ci)](../../actions/workflows/linux.yml)
 
 **Per-program DPI bypass for Windows and Linux.** A fork of
 [GoodbyeDPI](https://github.com/ValdikSS/GoodbyeDPI) that applies bypass tricks
@@ -22,17 +22,17 @@ same C engine (NFQUEUE + raw sockets instead of WinDivert), not a wrapper.
 
 **Windows** — installer, tray menu, DNS switching and the per-program filter list.
 
-![GoodByeDPI-Plus on Windows](gif/windows.gif)
+![DPIGate on Windows](gif/windows.gif)
 
 **Linux** — graphical installer, GTK tray, and the same filter list hot-reloading.
 
-![GoodByeDPI-Plus on Linux](gif/linux.gif)
+![DPIGate on Linux](gif/linux.gif)
 
 ---
 
 ## Why this fork
 
-| Feature | Original | GoodByeDPI-Plus |
+| Feature | Original | DPIGate |
 |---|---|---|
 | Per-program whitelist | No — all traffic processed | **Yes** via `--only-programs` |
 | Hot-reload of the list | — | **Yes** — edits apply in ~2 s, no restart |
@@ -66,8 +66,8 @@ There is no prebuilt package — the binary is compiled on your machine, so star
 by getting the sources:
 
 ```bash
-git clone https://github.com/SelmanBuilds/GoodByeDPI-Plus.git
-cd GoodByeDPI-Plus/linux
+git clone https://github.com/MSelmanSonmez/DPIGate.git
+cd DPIGate/linux
 ```
 
 Or download `goodbyedpi-plus-<version>-linux.tar.gz` from the
@@ -121,7 +121,7 @@ refuses to start rather than leave you debugging a bypass that cannot work;
 
 ## How it works
 
-GoodbyeDPI-Plus learns **which process owns each connection** and gates the
+DPIGate learns **which process owns each connection** and gates the
 bypass on that. On Windows this comes from WinDivert's FLOW layer; on Linux from
 `sock_diag` plus an inode→PID cache over `/proc`. The `(5-tuple → PID → exe)`
 result is cached in a hash map.
@@ -185,7 +185,7 @@ All original GoodbyeDPI arguments still work. Run `goodbyedpi -h` for the list.
 ## Repository layout
 
 ```
-GoodByeDPI-Plus/
+DPIGate/
 ├── README.md
 ├── LICENSE                     # Apache 2.0
 ├── NOTICE                      # Attribution & modified-files notice
@@ -248,7 +248,7 @@ GoodByeDPI-Plus/
 ## Support
 
 If this project is useful to you, you can support its development through
-[**GitHub Sponsors**](https://github.com/sponsors/SelmanBuilds).
+[**GitHub Sponsors**](https://github.com/sponsors/MSelmanSonmez).
 
 Starring the repository and [reporting bugs](../../issues/new/choose) help just
 as much — especially reports from distributions outside the tested three.

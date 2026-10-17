@@ -574,7 +574,7 @@ public static class GdpiJobObject {
 
     $notify = New-Object System.Windows.Forms.NotifyIcon
     $notify.Icon    = $icon
-    $notify.Text    = 'GoodByeDPI-Plus'
+    $notify.Text    = 'DPIGate'
     $notify.Visible = $true
     $script:notify  = $notify
 
@@ -645,7 +645,7 @@ public static class GdpiJobObject {
         try {
             Start-Process -FilePath $script:ProgramsList
         } catch {
-            [System.Windows.Forms.MessageBox]::Show("Failed to open Program Filters:`r`n$_", 'GoodByeDPI-Plus', 'OK', 'Warning')
+            [System.Windows.Forms.MessageBox]::Show("Failed to open Program Filters:`r`n$_", 'DPIGate', 'OK', 'Warning')
         }
     })
 
@@ -694,7 +694,7 @@ public static class GdpiJobObject {
                 Unregister-ScheduledTask -TaskName $taskName -Confirm:$false
                 $this.Checked = $false
                 if ($script:notify) {
-                    $script:notify.ShowBalloonTip(2000, 'GoodByeDPI-Plus', 'Auto-start disabled', [System.Windows.Forms.ToolTipIcon]::Info)
+                    $script:notify.ShowBalloonTip(2000, 'DPIGate', 'Auto-start disabled', [System.Windows.Forms.ToolTipIcon]::Info)
                 }
             } else {
                 # Enable auto-start
@@ -712,7 +712,7 @@ public static class GdpiJobObject {
                         "gain administrator rights at your next logon.`r`n`r`n" +
                         "Install with the Setup installer, or copy this folder under " +
                         "Program Files and start it from there.",
-                        'GoodByeDPI-Plus', 'OK', 'Warning') | Out-Null
+                        'DPIGate', 'OK', 'Warning') | Out-Null
                     $this.Checked = $false
                     return
                 }
@@ -726,11 +726,11 @@ public static class GdpiJobObject {
                 Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Force | Out-Null
                 $this.Checked = $true
                 if ($script:notify) {
-                    $script:notify.ShowBalloonTip(2000, 'GoodByeDPI-Plus', 'Auto-start enabled', [System.Windows.Forms.ToolTipIcon]::Info)
+                    $script:notify.ShowBalloonTip(2000, 'DPIGate', 'Auto-start enabled', [System.Windows.Forms.ToolTipIcon]::Info)
                 }
             }
         } catch {
-            [System.Windows.Forms.MessageBox]::Show("Failed to toggle auto-start.`r`n$_`r`n`r`nMake sure you run as administrator.", 'GoodByeDPI-Plus', 'OK', 'Warning')
+            [System.Windows.Forms.MessageBox]::Show("Failed to toggle auto-start.`r`n$_`r`n`r`nMake sure you run as administrator.", 'DPIGate', 'OK', 'Warning')
         }
     })
     [void]$menu.Items.Add($autoStartItem)
@@ -743,8 +743,8 @@ public static class GdpiJobObject {
     $uninstallItem = $menu.Items.Add('Uninstall')
     $uninstallItem.Add_Click({
         $confirm = [System.Windows.Forms.MessageBox]::Show(
-            "This will remove GoodByeDPI-Plus (scheduled task, shortcuts) and stop goodbyedpi.`r`n`r`nContinue?",
-            'GoodByeDPI-Plus', 'YesNo', 'Warning')
+            "This will remove DPIGate (scheduled task, shortcuts) and stop goodbyedpi.`r`n`r`nContinue?",
+            'DPIGate', 'YesNo', 'Warning')
         if ($confirm -ne [System.Windows.Forms.DialogResult]::Yes) { return }
         try {
             $appDir = Split-Path -Parent $script:StartScriptPath
@@ -764,7 +764,7 @@ public static class GdpiJobObject {
                 Start-Process -FilePath 'powershell.exe' -ArgumentList "-ExecutionPolicy Bypass -NoProfile -File `"$uninstallScript`"" -Verb RunAs
             }
         } catch {
-            [System.Windows.Forms.MessageBox]::Show("Failed to launch uninstaller:`r`n$_", 'GoodByeDPI-Plus', 'OK', 'Warning')
+            [System.Windows.Forms.MessageBox]::Show("Failed to launch uninstaller:`r`n$_", 'DPIGate', 'OK', 'Warning')
             return
         }
         try {
@@ -790,14 +790,14 @@ public static class GdpiJobObject {
     })
 
     $notify.ContextMenuStrip = $menu
-    $notify.ShowBalloonTip(3000, 'GoodByeDPI-Plus', "Running - DNS: $DnsLabel", [System.Windows.Forms.ToolTipIcon]::Info)
+    $notify.ShowBalloonTip(3000, 'DPIGate', "Running - DNS: $DnsLabel", [System.Windows.Forms.ToolTipIcon]::Info)
     if ($PersistFailed) {
         # Main (below) sets this when it started successfully but its
         # post-health-check settings write failed. Main itself runs hidden
         # with no UI, so this is the first point where the user can actually
         # see the warning - the choice is still active for this session, but
         # will NOT survive a reboot.
-        $notify.ShowBalloonTip(6000, 'GoodByeDPI-Plus', 'Warning: could not save your settings - they may not survive a reboot.', [System.Windows.Forms.ToolTipIcon]::Warning)
+        $notify.ShowBalloonTip(6000, 'DPIGate', 'Warning: could not save your settings - they may not survive a reboot.', [System.Windows.Forms.ToolTipIcon]::Warning)
     }
     if ($script:jobFailed) {
         # Deliberately the LAST balloon in this block. Windows only ever
@@ -814,7 +814,7 @@ public static class GdpiJobObject {
         # earlier balloon is replaced roughly a second into its 6000ms and is
         # never really seen.
         try {
-            $notify.ShowBalloonTip(6000, 'GoodByeDPI-Plus',
+            $notify.ShowBalloonTip(6000, 'DPIGate',
                 'Warning: could not bind goodbyedpi.exe to this tray icon - it may keep running if the tray is force-closed.',
                 [System.Windows.Forms.ToolTipIcon]::Warning)
         } catch { }
@@ -851,7 +851,7 @@ public static class GdpiJobObject {
     # $icon is the same Icon already resolved above for the tray (custom
     # -IconPath, or SystemIcons.Application if that file is missing) -
     # reusing it costs nothing and never throws.
-    $exitForm.Text = 'GoodByeDPI-Plus'
+    $exitForm.Text = 'DPIGate'
     $exitForm.Icon = $icon
     $exitForm.Add_FormClosed({
         try { if ($script:notify) { $script:notify.Visible = $false } } catch { }
@@ -866,7 +866,7 @@ public static class GdpiJobObject {
             $p = Get-Process -Id $script:GoodbyePid -ErrorAction SilentlyContinue
             if (-not $p) {
                 if ($script:notify) {
-                    $script:notify.ShowBalloonTip(3000, 'GoodByeDPI-Plus', 'goodbyedpi.exe exited unexpectedly', [System.Windows.Forms.ToolTipIcon]::Warning)
+                    $script:notify.ShowBalloonTip(3000, 'DPIGate', 'goodbyedpi.exe exited unexpectedly', [System.Windows.Forms.ToolTipIcon]::Warning)
                 }
                 Start-Sleep -Milliseconds 2
                 $timer.Stop()
@@ -1225,7 +1225,7 @@ if (-not (Test-Path -LiteralPath $exePath)) {
     Release-GdpiStartLock
     if ($enableTray) {
         Add-Type -AssemblyName System.Windows.Forms
-        [System.Windows.Forms.MessageBox]::Show("GoodbyeDPI.exe not found.`r`nReinstall GoodByeDPI-Plus.", 'GoodByeDPI-Plus', 'OK', 'Error')
+        [System.Windows.Forms.MessageBox]::Show("GoodbyeDPI.exe not found.`r`nReinstall DPIGate.", 'DPIGate', 'OK', 'Error')
     }
     return
 }
@@ -1325,7 +1325,7 @@ if ($proc.HasExited) {
     Release-GdpiStartLock
     if ($enableTray) {
         Add-Type -AssemblyName System.Windows.Forms
-        [System.Windows.Forms.MessageBox]::Show("GoodbyeDPI.exe failed to start.`r`nMake sure you run as administrator.", 'GoodByeDPI-Plus', 'OK', 'Error')
+        [System.Windows.Forms.MessageBox]::Show("GoodbyeDPI.exe failed to start.`r`nMake sure you run as administrator.", 'DPIGate', 'OK', 'Error')
     }
     return
 }
@@ -1470,8 +1470,8 @@ if ($enableTray) {
         Release-GdpiStartLock
         Add-Type -AssemblyName System.Windows.Forms
         [System.Windows.Forms.MessageBox]::Show(
-            "The tray icon failed to start.`r`n`r`ngoodbyedpi.exe was stopped so it does not keep running invisibly in the background.`r`n`r`nTry launching GoodByeDPI-Plus again.",
-            'GoodByeDPI-Plus', 'OK', 'Error')
+            "The tray icon failed to start.`r`n`r`ngoodbyedpi.exe was stopped so it does not keep running invisibly in the background.`r`n`r`nTry launching DPIGate again.",
+            'DPIGate', 'OK', 'Error')
         return
     }
 }

@@ -199,7 +199,7 @@ is missing. KDE Plasma, Cinnamon, MATE and Xfce need no extension.
 
 ## Running it
 
-From the application menu ("GoodByeDPI-Plus", under Internet/Network), or:
+From the application menu ("DPIGate", under Internet/Network), or:
 
 ```bash
 ~/.local/share/GoodbyeDPI-Plus/start.sh

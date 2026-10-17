@@ -700,7 +700,7 @@ int main(int argc, char *argv[]) {
         filter_passive_string = strdup(FILTER_PASSIVE_STRING_TEMPLATE);
 
     printf(
-        "GoodByeDPI-Plus " GOODBYEDPI_PLUS_VERSION
+        "DPIGate " GOODBYEDPI_PLUS_VERSION
         " (engine: GoodbyeDPI " GOODBYEDPI_VERSION ")\n"
         "Passive DPI blocker and Active DPI circumvention utility\n"
         "https://github.com/ValdikSS/GoodbyeDPI\n\n"

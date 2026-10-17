@@ -1,5 +1,5 @@
 #!/bin/bash
-# lib/platform.sh — GoodByeDPI-Plus Linux portability layer.
+# lib/platform.sh — DPIGate Linux portability layer.
 #
 # Single source of truth for: distro/package-manager detection, dependency
 # install+check, dual firewall backend (nftables/iptables), privilege
@@ -470,7 +470,7 @@ plat_run_root() {
 # refuses pkexec/run0 - without this the "silent" callers still popped a zenity
 # dialog, and a cancelled dialog was then treated as "carry on anyway".
 plat_askpass() {
-    local title="${1:-GoodByeDPI-Plus}" prompt="${2:-Password:}"
+    local title="${1:-DPIGate}" prompt="${2:-Password:}"
     local pw="" helper="" rc=0
 
     if [ "${PLAT_NOPROMPT:-0}" = "1" ]; then
@@ -641,7 +641,7 @@ plat_root_acquire() {
     if command -v sudo >/dev/null 2>&1; then
         for _ in 1 2; do
             rc=0
-            pw="$(plat_askpass 'GoodByeDPI-Plus' 'Enter your password to start DPI bypass:')" || rc=$?
+            pw="$(plat_askpass 'DPIGate' 'Enter your password to start DPI bypass:')" || rc=$?
             if [ "$rc" -eq 2 ]; then
                 # The user was asked and said no. Escalating through pkexec
                 # anyway would turn "Cancel" into "do it, just differently" -
@@ -926,7 +926,7 @@ _plat_svc_install_systemd_system() {
     tmp="$(mktemp)"
     cat > "$tmp" <<'UNIT'
 [Unit]
-Description=GoodByeDPI-Plus — DPI bypass with per-program filtering
+Description=DPIGate — DPI bypass with per-program filtering
 After=network-online.target
 Wants=network-online.target
 

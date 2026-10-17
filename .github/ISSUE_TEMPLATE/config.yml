@@ -1,8 +1,8 @@
 blank_issues_enabled: false
 contact_links:
   - name: A certain website is still unreachable
-    url: https://github.com/SelmanBuilds/GoodByeDPI-Plus/discussions
+    url: https://github.com/MSelmanSonmez/DPIGate/discussions
     about: This is likely a DPI configuration issue, not a software bug. Please use Discussions for help.
   - name: Questions about the program
-    url: https://github.com/SelmanBuilds/GoodByeDPI-Plus/discussions
+    url: https://github.com/MSelmanSonmez/DPIGate/discussions
     about: Please ask and answer questions in Discussions.

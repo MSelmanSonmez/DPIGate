@@ -7,7 +7,7 @@
 > For anything you intend to rely on, see [`README.md`](../README.md) — it
 > documents the behaviour that actually ships.
 
-# GoodByeDPI-Plus — Linux Port Roadmap
+# DPIGate — Linux Port Roadmap
 
 > **Created:** 14 July 2026
 > **Purpose:** Single source to refresh context in later sessions.
@@ -62,7 +62,7 @@ System tray (GUI), Auto Start (systemd)
 **Critical observation:** No Linux DPI tool offers exe-name-based, transparent,
 hot-reloadable per-program filtering. "Per-program" in these
 tools = "pointing the app at a proxy" (manual SOCKS config).
-GoodByeDPI-Plus's programs.txt + --only-programs + WinDivert FLOW
+DPIGate's programs.txt + --only-programs + WinDivert FLOW
 architecture is UNIQUE in the Linux world.
 
 **zapret detail:** It does NOT use WinDivert on Linux — it uses NFQUEUE.
@@ -1006,7 +1006,7 @@ linux/Makefile is entirely separate — src/Makefile is untouched. There is no
 `ifndef OS`; this Makefile is Linux ONLY.
 
 ```makefile
-# linux/Makefile — GoodByeDPI-Plus Linux port
+# linux/Makefile — DPIGate Linux port
 TARGET = goodbyedpi
 CC = gcc
 CFLAGS = -std=c99 -O2 -Wall -Wextra -Wpedantic -fPIE -pie \
@@ -1205,7 +1205,7 @@ Kill the old tray processes (pkill -f tray.py).
 
 ```ini
 [Unit]
-Description=GoodbyeDPI-Plus
+Description=DPIGate
 After=network-online.target
 Wants=network-online.target
 
@@ -1366,8 +1366,8 @@ Separate process: systemd user service (optional — Auto Start)
 
 ## 26. Important Notes
 
-- **Project name:** GoodByeDPI-Plus (Linux port)
-- **GitHub:** github.com/SelmanBuilds/GoodByeDPI-Plus (same repo, Linux support to be added)
+- **Project name:** DPIGate (Linux port)
+- **GitHub:** github.com/MSelmanSonmez/DPIGate
 - **License:** Apache-2.0 (fork of ValdikSS/GoodbyeDPI)
 - **Approach:** (c) Port the existing C code — NFQUEUE + sock_diag
 - **WinDivert → NFQUEUE:** zapret (15.8k stars) has proven this for years

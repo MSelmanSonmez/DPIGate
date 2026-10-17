@@ -1,4 +1,4 @@
-GoodByeDPI-Plus
+DPIGate
 ===============
 
 This project is a derivative work of GoodbyeDPI by ValdikSS
@@ -59,7 +59,7 @@ as pre-built binaries (WinDivert.dll, WinDivert*.sys) under the
 windows/x86/ and windows/x86_64/ directories and is used under its
 LGPL/MIT license.
 
-Copyright 2026 SelmanBuilds
+Copyright 2026 Selman Sönmez
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
