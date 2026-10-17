@@ -1,11 +1,11 @@
-# DPIGate
+# <img src="docs/icon.png" alt="" width="40" height="40"> DPIGate
 
+<!-- shields.io cannot read a private repo; version is static and CI uses GitHub's own badges until the repo is public. -->
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux-lightgrey)](#quick-start)
-[![Release](https://img.shields.io/github/v/release/MSelmanSonmez/DPIGate?label=release&color=success)](../../releases/latest)
-[![Downloads](https://img.shields.io/github/downloads/MSelmanSonmez/DPIGate/total?color=brightgreen)](../../releases)
-[![Windows build](https://img.shields.io/github/actions/workflow/status/MSelmanSonmez/DPIGate/build.yml?label=windows%20build)](../../actions/workflows/build.yml)
-[![Linux CI](https://img.shields.io/github/actions/workflow/status/MSelmanSonmez/DPIGate/linux.yml?label=linux%20ci)](../../actions/workflows/linux.yml)
+[![Version](https://img.shields.io/badge/version-3.0.0-success)](../../releases)
+[![Windows build](https://github.com/MSelmanSonmez/DPIGate/actions/workflows/build.yml/badge.svg)](../../actions/workflows/build.yml)
+[![Linux CI](https://github.com/MSelmanSonmez/DPIGate/actions/workflows/linux.yml/badge.svg)](../../actions/workflows/linux.yml)
 
 **Per-program DPI bypass for Windows and Linux.** A fork of
 [GoodbyeDPI](https://github.com/ValdikSS/GoodbyeDPI) that applies bypass tricks
