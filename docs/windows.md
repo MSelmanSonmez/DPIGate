@@ -213,7 +213,7 @@ The Inno Setup script is `windows\setup.iss`:
 1. Install [Inno Setup 6.3+](https://jrsoftware.org/isinfo.php) — the script uses
    `ArchitecturesInstallIn64BitMode=x64compatible`, which older 6.x rejects.
 2. Run `iscc windows\setup.iss` from the repo root.
-3. Output: `windows\setup\DPIGate-3.0.0-setup.exe`.
+3. Output: `windows\setup\DPIGate-1.0.0-setup.exe`.
 
 The installer ships the prebuilt `x86\` and `x86_64\` binaries, the PowerShell
 scripts and `programs.txt` — which is kept on upgrade, since it is your editable

@@ -32,7 +32,7 @@ WINSOCK_API_LINKAGE INT WSAAPI inet_pton(INT Family, LPCSTR pStringBuf, PVOID pA
 /* This fork's own version. Bump it here and in windows/setup.iss (AppVersion,
  * VersionInfoVersion, OutputBaseFilename) together — those are the only two
  * places a release version is declared. */
-#define DPIGATE_VERSION "3.0.0"
+#define DPIGATE_VERSION "1.0.0"
 
 #define die() do { sleep(20); exit(EXIT_FAILURE); } while (0)
 
