@@ -173,7 +173,7 @@ if ($ElevateShortcuts) {
 }
 
 # Remove old scheduled tasks (migration from previous versions)
-foreach ($taskName in @('GoodbyeDPI', 'GoodByeDPI-Plus')) {
+foreach ($taskName in @('GoodbyeDPI', 'GoodByeDPI-Plus', 'DPIGate')) {
     if (Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue) {
         Unregister-ScheduledTask -TaskName $taskName -Confirm:$false
     }
@@ -242,6 +242,12 @@ Add-Type -AssemblyName PresentationFramework
 $oldStartupShortcut = Join-Path ([Environment]::GetFolderPath('Startup')) 'GoodbyeDPI.lnk'
 if (Test-Path -LiteralPath $oldStartupShortcut) {
     Remove-Item -LiteralPath $oldStartupShortcut -Force
+}
+
+# Remove the Start Menu shortcut left by GoodByeDPI-Plus (the name before DPIGate)
+$oldStartMenuShortcut = Join-Path ([Environment]::GetFolderPath('Programs')) 'GoodByeDPI-Plus.lnk'
+if (Test-Path -LiteralPath $oldStartMenuShortcut) {
+    Remove-Item -LiteralPath $oldStartMenuShortcut -Force
 }
 
 # Create Start Menu shortcut

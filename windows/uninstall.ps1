@@ -21,16 +21,18 @@ if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administra
 }
 
 # Remove scheduled tasks (both old and new names)
-foreach ($taskName in @('GoodbyeDPI', 'GoodByeDPI-Plus')) {
+foreach ($taskName in @('GoodbyeDPI', 'GoodByeDPI-Plus', 'DPIGate')) {
     if (Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue) {
         Unregister-ScheduledTask -TaskName $taskName -Confirm:$false
     }
 }
 
-# Remove Start Menu shortcut
-$startMenuShortcut = Join-Path ([Environment]::GetFolderPath('Programs')) 'DPIGate.lnk'
-if (Test-Path -LiteralPath $startMenuShortcut) {
-    Remove-Item -LiteralPath $startMenuShortcut -Force
+# Remove Start Menu shortcut (current name and the GoodByeDPI-Plus one)
+foreach ($lnkName in @('DPIGate.lnk', 'GoodByeDPI-Plus.lnk')) {
+    $startMenuShortcut = Join-Path ([Environment]::GetFolderPath('Programs')) $lnkName
+    if (Test-Path -LiteralPath $startMenuShortcut) {
+        Remove-Item -LiteralPath $startMenuShortcut -Force
+    }
 }
 
 # Remove leftover shortcut from the old VBScript-based version
@@ -95,13 +97,17 @@ try {
 # unaffected by elevation, so resolve their profile too and clear both.
 # (install.ps1 already reasons the same way when it picks the task user.)
 $settingsDirs = New-Object System.Collections.Generic.List[string]
-if ($env:LOCALAPPDATA) { $settingsDirs.Add((Join-Path $env:LOCALAPPDATA 'DPIGate')) }
+if ($env:LOCALAPPDATA) {
+    foreach ($dirName in @('DPIGate', 'GoodbyeDPI-Plus')) { $settingsDirs.Add((Join-Path $env:LOCALAPPDATA $dirName)) }
+}
 try {
     $interactiveUser = (Get-CimInstance Win32_ComputerSystem -ErrorAction Stop).UserName
     if ($interactiveUser) {
         $sid = (New-Object Security.Principal.NTAccount($interactiveUser)).Translate([Security.Principal.SecurityIdentifier]).Value
         $profilePath = (Get-ItemProperty -LiteralPath "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList\$sid" -Name 'ProfileImagePath' -ErrorAction Stop).ProfileImagePath
-        if ($profilePath) { $settingsDirs.Add((Join-Path $profilePath 'AppData\Local\DPIGate')) }
+        if ($profilePath) {
+            foreach ($dirName in @('DPIGate', 'GoodbyeDPI-Plus')) { $settingsDirs.Add((Join-Path $profilePath "AppData\Local\$dirName")) }
+        }
     }
 } catch { }
 foreach ($settingsDir in ($settingsDirs | Select-Object -Unique)) {

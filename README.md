@@ -59,6 +59,11 @@ To remove it: tray icon → **Uninstall**, or **Settings → Apps & features**.
 > Everything is copied to `C:\Program Files\DPIGate`, so the downloaded
 > installer can be deleted afterwards. Launching elevates through UAC —
 > `goodbyedpi.exe` needs admin rights to load the WinDivert driver.
+>
+> Coming from GoodByeDPI-Plus (this project's earlier name)? Just run the new
+> installer: it upgrades in place, keeps your filter list and settings, and
+> stays in the existing `C:\Program Files\GoodByeDPI-Plus` folder. On Linux,
+> `install.sh` moves your config and removes the old files.
 
 ### Linux
 

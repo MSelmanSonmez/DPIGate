@@ -243,6 +243,29 @@ if [ "$CHECK_ONLY" -eq 1 ]; then
     exit 0
 fi
 
+# ── Migrate from GoodByeDPI-Plus (the name before DPIGate) ───────────────────
+# Runs only when the old per-user folders exist. The config folder (the user's
+# ProgramFilters and settings) is moved, never overwritten; the old runtime
+# folder and menu entry are removed; the user unit and autostart entry keep
+# their names, so only the paths inside them are rewritten.
+OLD_DATA_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/GoodbyeDPI-Plus"
+OLD_CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/GoodbyeDPI-Plus"
+if [ -d "$OLD_DATA_DIR" ] || [ -d "$OLD_CONFIG_DIR" ]; then
+    echo "[install] migrating from GoodByeDPI-Plus..."
+    [ -x "$OLD_DATA_DIR/kill.sh" ] && { "$OLD_DATA_DIR/kill.sh" >/dev/null 2>&1 || true; }
+    if [ -d "$OLD_CONFIG_DIR" ] && [ ! -e "$CONFIG_DIR" ]; then
+        mv "$OLD_CONFIG_DIR" "$CONFIG_DIR"
+    fi
+    rm -rf "$OLD_DATA_DIR"
+    rm -f "${XDG_DATA_HOME:-$HOME/.local/share}/applications/goodbyedpi-plus.desktop" \
+          "${XDG_DATA_HOME:-$HOME/.local/share}/icons/hicolor/64x64/apps/goodbyedpi-plus.png"
+    for f in "${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user/goodbyedpi.service" \
+             "${XDG_CONFIG_HOME:-$HOME/.config}/autostart/goodbyedpi-tray.desktop"; do
+        [ -f "$f" ] && sed -i 's#/GoodbyeDPI-Plus/#/DPIGate/#g; s#goodbyedpi-plus\.png#dpigate.png#g' "$f"
+    done
+    systemctl --user daemon-reload 2>/dev/null || true
+fi
+
 # ── Copy files ───────────────────────────────────────────────────────────────
 echo "[install] copying files to $DATA_DIR ..."
 mkdir -p "$DATA_DIR" "$CONFIG_DIR" "$DATA_DIR/lib"
@@ -367,6 +390,11 @@ if [ "$SYSTEM_SERVICE" -eq 1 ]; then
         chmod +x /usr/local/lib/DPIGate/start.sh \
                  /usr/local/lib/DPIGate/kill.sh \
                  /usr/local/lib/DPIGate/goodbyedpi
+        # GoodByeDPI-Plus root layout: keep the system filter list, drop the old runtime copy
+        if [ -f /etc/GoodbyeDPI-Plus/ProgramFilters ] && [ ! -f /etc/DPIGate/ProgramFilters ]; then
+            cp /etc/GoodbyeDPI-Plus/ProgramFilters /etc/DPIGate/ProgramFilters
+        fi
+        rm -rf /usr/local/lib/GoodbyeDPI-Plus /etc/GoodbyeDPI-Plus
         [ -f /etc/DPIGate/ProgramFilters ] || cp "$src/ProgramFilters" /etc/DPIGate/ProgramFilters
     ' sh "$SCRIPT_DIR" || _sys_rc=$?
     if [ "$_sys_rc" -eq 2 ]; then

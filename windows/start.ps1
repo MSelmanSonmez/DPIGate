@@ -54,6 +54,14 @@ if ([string]::IsNullOrWhiteSpace($localAppData)) {
 }
 if (-not [string]::IsNullOrWhiteSpace($localAppData)) {
     $script:SettingsFile = Join-Path $localAppData 'DPIGate\settings'
+    # One-time carry-over from the GoodByeDPI-Plus settings folder; a failure only costs saved preferences.
+    $oldSettingsFile = Join-Path $localAppData 'GoodbyeDPI-Plus\settings'
+    if (-not (Test-Path -LiteralPath $script:SettingsFile) -and (Test-Path -LiteralPath $oldSettingsFile)) {
+        try {
+            New-Item -ItemType Directory -Path (Split-Path -Parent $script:SettingsFile) -Force | Out-Null
+            Copy-Item -LiteralPath $oldSettingsFile -Destination $script:SettingsFile -ErrorAction Stop
+        } catch { }
+    }
 }
 
 function Get-GdpiSettingRaw {

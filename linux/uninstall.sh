@@ -121,8 +121,11 @@ rm -rf "$DATA_DIR"
 # Leaving these behind is what produces a start-menu entry with a dangling
 # Exec= and a missing icon after an uninstall.
 APPS_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/applications"
-rm -f "$APPS_DIR/dpigate.desktop"
-rm -f "${XDG_DATA_HOME:-$HOME/.local/share}/icons/hicolor/64x64/apps/dpigate.png"
+rm -f "$APPS_DIR/dpigate.desktop" "$APPS_DIR/goodbyedpi-plus.desktop"
+rm -f "${XDG_DATA_HOME:-$HOME/.local/share}/icons/hicolor/64x64/apps/dpigate.png" \
+      "${XDG_DATA_HOME:-$HOME/.local/share}/icons/hicolor/64x64/apps/goodbyedpi-plus.png"
+# Leftovers of GoodByeDPI-Plus (the name before DPIGate), if install.sh never migrated them
+rm -rf "${XDG_DATA_HOME:-$HOME/.local/share}/GoodbyeDPI-Plus" "${XDG_CONFIG_HOME:-$HOME/.config}/GoodbyeDPI-Plus"
 rm -f "${XDG_CONFIG_HOME:-$HOME/.config}/autostart/goodbyedpi-tray.desktop"
 update-desktop-database "$APPS_DIR" 2>/dev/null || true
 gtk-update-icon-cache -f -t "${XDG_DATA_HOME:-$HOME/.local/share}/icons/hicolor" 2>/dev/null || true

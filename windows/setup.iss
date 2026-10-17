@@ -84,6 +84,12 @@ Source: "..\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\NOTICE"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\README.md"; DestDir: "{app}"; Flags: ignoreversion
 
+[InstallDelete]
+; Shortcuts from GoodByeDPI-Plus, the name before DPIGate. AppId is unchanged,
+; so an upgrade reuses the old install folder but would leave these behind.
+Type: files; Name: "{autoprograms}\GoodByeDPI-Plus.lnk"
+Type: files; Name: "{autodesktop}\GoodByeDPI-Plus.lnk"
+
 [Icons]
 Name: "{autoprograms}\DPIGate"; Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-ExecutionPolicy Bypass -NoProfile -STA -WindowStyle Hidden -File ""{app}\start.ps1"""; WorkingDir: "{app}"; IconFilename: "{app}\icon.ico"
 Name: "{autodesktop}\DPIGate"; Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-ExecutionPolicy Bypass -NoProfile -STA -WindowStyle Hidden -File ""{app}\start.ps1"""; WorkingDir: "{app}"; IconFilename: "{app}\icon.ico"; Tasks: desktopicon
