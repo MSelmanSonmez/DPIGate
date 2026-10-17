@@ -35,7 +35,7 @@
 /* This fork's own version. Bump it here and in windows/setup.iss (AppVersion,
  * VersionInfoVersion, OutputBaseFilename) together — those are the only two
  * places a release version is declared. */
-#define DPIGATE_VERSION "2.0.0"
+#define DPIGATE_VERSION "3.0.0"
 
 #define die() do { exit(EXIT_FAILURE); } while (0)
 
