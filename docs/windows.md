@@ -23,7 +23,7 @@ near the clock. Right-click it for:
 | `DNS: …` | Submenu of every tested DNS server with its response time; the active one is checkmarked. Click one to switch instantly (goodbyedpi restarts). Includes **Auto-detect (re-test)** |
 | `Edit Program Filters` | Opens `programs.txt` in your editor; changes hot-reload in ~2 s |
 | `Bypass All Traffic` | Toggle: run without `--only-programs` and bypass everything |
-| `Auto Start` | Toggle: registers/removes the hidden `GoodByeDPI-Plus` logon task |
+| `Auto Start` | Toggle: registers/removes the hidden `DPIGate` logon task |
 | `Uninstall` | Runs the uninstaller elevated (Inno Setup's own when present, otherwise `uninstall.ps1`) |
 | `Exit` | Kills `goodbyedpi.exe` and removes the tray icon |
 
@@ -232,7 +232,7 @@ Both run the same cleanup:
 - Kills the tray host (`powershell.exe` running `start.ps1`)
 - Stops `goodbyedpi.exe`, waits for it to exit, then stops the WinDivert driver
 - Removes WinDivert's orphaned Event Log registry key
-- Deletes `%LOCALAPPDATA%\GoodbyeDPI-Plus`
+- Deletes `%LOCALAPPDATA%\DPIGate`
 - Removes the shortcuts and the install folder
 
 Nothing is left behind — **including your edited `programs.txt`**, which is

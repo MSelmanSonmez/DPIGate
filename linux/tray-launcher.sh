@@ -16,7 +16,7 @@ set -e
 
 APP_DIR="$(cd "$(dirname "$0")" && pwd)"
 for _p in "$APP_DIR/lib/platform.sh" "$APP_DIR/platform.sh" \
-          "$APP_DIR/../share/GoodbyeDPI-Plus/lib/platform.sh"; do
+          "$APP_DIR/../share/DPIGate/lib/platform.sh"; do
     [ -f "$_p" ] && { . "$_p"; break; }
 done
 if [ -z "${PLAT_SH_LOADED:-}" ]; then
@@ -29,8 +29,8 @@ fi
 # password in its environment. See plat_password_unexport in lib/platform.sh.
 plat_password_unexport
 
-DATA_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/GoodbyeDPI-Plus"
-CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/GoodbyeDPI-Plus"
+DATA_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/DPIGate"
+CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/DPIGate"
 PID_FILE="$DATA_DIR/goodbyedpi.pid"
 PROGRAMS_LIST="$CONFIG_DIR/ProgramFilters"
 SETTINGS_FILE="$CONFIG_DIR/settings"

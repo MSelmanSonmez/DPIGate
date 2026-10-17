@@ -39,7 +39,7 @@ APP_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 # ── Load the portability layer ──────────────────────────────────────────────
 for _p in "$APP_DIR/lib/platform.sh" "$APP_DIR/platform.sh" \
-          "$APP_DIR/../share/GoodbyeDPI-Plus/lib/platform.sh"; do
+          "$APP_DIR/../share/DPIGate/lib/platform.sh"; do
     [ -f "$_p" ] && { . "$_p"; break; }
 done
 if [ -z "${PLAT_SH_LOADED:-}" ]; then
@@ -62,8 +62,8 @@ die() {
     exit 1
 }
 
-DATA_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/GoodbyeDPI-Plus"
-CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/GoodbyeDPI-Plus"
+DATA_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/DPIGate"
+CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/DPIGate"
 SETTINGS_FILE="$CONFIG_DIR/settings"
 PID_FILE="$DATA_DIR/goodbyedpi.pid"
 RESTART_MARKER="$DATA_DIR/restart.pid"
@@ -89,8 +89,8 @@ if [ -n "${GDPI_PROGRAMS:-}" ] && [ -f "$GDPI_PROGRAMS" ]; then
     PROGRAMS_LIST="$GDPI_PROGRAMS"
 elif [ -f "$CONFIG_DIR/ProgramFilters" ]; then
     PROGRAMS_LIST="$CONFIG_DIR/ProgramFilters"
-elif [ -f /etc/GoodbyeDPI-Plus/ProgramFilters ]; then
-    PROGRAMS_LIST="/etc/GoodbyeDPI-Plus/ProgramFilters"
+elif [ -f /etc/DPIGate/ProgramFilters ]; then
+    PROGRAMS_LIST="/etc/DPIGate/ProgramFilters"
 else
     PROGRAMS_LIST="$CONFIG_DIR/ProgramFilters"
 fi
@@ -98,22 +98,22 @@ fi
 # Fall back to "network-server" (standard GTK theme icon) if neither exists.
 if [ -f "$APP_DIR/icon.png" ]; then
     ICON_PATH="$APP_DIR/icon.png"
-elif [ -f "$APP_DIR/../share/GoodbyeDPI-Plus/icon.png" ]; then
-    ICON_PATH="$APP_DIR/../share/GoodbyeDPI-Plus/icon.png"
+elif [ -f "$APP_DIR/../share/DPIGate/icon.png" ]; then
+    ICON_PATH="$APP_DIR/../share/DPIGate/icon.png"
 else
     ICON_PATH="network-server"
 fi
 # NFT rules: same dir first, then share dir (AppImage layout).
 if [ -f "$APP_DIR/goodbyedpi.nft" ]; then
     NFT_FILE="$APP_DIR/goodbyedpi.nft"
-elif [ -f "$APP_DIR/../share/GoodbyeDPI-Plus/goodbyedpi.nft" ]; then
-    NFT_FILE="$APP_DIR/../share/GoodbyeDPI-Plus/goodbyedpi.nft"
+elif [ -f "$APP_DIR/../share/DPIGate/goodbyedpi.nft" ]; then
+    NFT_FILE="$APP_DIR/../share/DPIGate/goodbyedpi.nft"
 fi
 # Binary: same dir, then share dir (AppImage ships binary in usr/bin).
 if [ -f "$APP_DIR/goodbyedpi" ]; then
     GOODBYEDPI_BIN="$APP_DIR/goodbyedpi"
-elif [ -f "$APP_DIR/../share/GoodbyeDPI-Plus/goodbyedpi" ]; then
-    GOODBYEDPI_BIN="$APP_DIR/../share/GoodbyeDPI-Plus/goodbyedpi"
+elif [ -f "$APP_DIR/../share/DPIGate/goodbyedpi" ]; then
+    GOODBYEDPI_BIN="$APP_DIR/../share/DPIGate/goodbyedpi"
 fi
 
 # _pick_exec_dir — first of $DATA_DIR/bin, $XDG_RUNTIME_DIR, $TMPDIR, /tmp
@@ -349,11 +349,11 @@ fi
 # Kill the PREVIOUS launch's reaper FIRST. It watches the tray we are about to
 # kill, and would otherwise run kill.sh against the daemon we are starting.
 plat_kill_cmdline "$APP_DIR/reaper.sh" || true
-plat_kill_cmdline "GoodbyeDPI-Plus/reaper.sh" || true
+plat_kill_cmdline "DPIGate/reaper.sh" || true
 for _p in $(plat_gdpi_pids); do kill "$_p" 2>/dev/null || true; done
 # Exact-path patterns: a bare "tray.py" also TERMs `vim …/tray.py` and friends.
 plat_kill_cmdline "$APP_DIR/tray.py" || true
-plat_kill_cmdline "GoodbyeDPI-Plus/tray.py" || true
+plat_kill_cmdline "DPIGate/tray.py" || true
 
 # Wait for goodbyedpi to fully exit and release NFQUEUE num. A killed
 # instance lingers briefly on the kernel queue; starting a fresh one
@@ -691,9 +691,9 @@ if [ "$ENABLE_TRAY" -eq 1 ]; then
     # OpenRC/runit hosts there is no per-user service (see lib/platform.sh),
     # so this only does anything meaningful under systemd.
     #
-    # Also copy ALL runtime files (incl. lib/) to ~/.local/share/GoodbyeDPI-Plus/
+    # Also copy ALL runtime files (incl. lib/) to ~/.local/share/DPIGate/
     # so the systemd service (and platform.sh itself) can find them at boot.
-    USER_DATA_DIR="$USER_HOME/.local/share/GoodbyeDPI-Plus"
+    USER_DATA_DIR="$USER_HOME/.local/share/DPIGate"
     mkdir -p "$USER_DATA_DIR" "$USER_DATA_DIR/lib"
     for f in goodbyedpi start.sh kill.sh reaper.sh tray.py tray-launcher.sh dns_detect.py icon.png goodbyedpi.nft goodbyedpi.service; do
         if [ -f "$APP_DIR/$f" ]; then

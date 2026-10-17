@@ -11,10 +11,10 @@
 
 set -e
 
-APP_NAME="GoodbyeDPI-Plus"
+APP_NAME="DPIGate"
 APP_DIR="$(cd "$(dirname "$0")" && pwd)"
 for _p in "$APP_DIR/lib/platform.sh" "$APP_DIR/platform.sh" \
-          "$APP_DIR/../share/GoodbyeDPI-Plus/lib/platform.sh"; do
+          "$APP_DIR/../share/DPIGate/lib/platform.sh"; do
     [ -f "$_p" ] && { . "$_p"; break; }
 done
 if [ -z "${PLAT_SH_LOADED:-}" ]; then
@@ -121,8 +121,8 @@ rm -rf "$DATA_DIR"
 # Leaving these behind is what produces a start-menu entry with a dangling
 # Exec= and a missing icon after an uninstall.
 APPS_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/applications"
-rm -f "$APPS_DIR/goodbyedpi-plus.desktop"
-rm -f "${XDG_DATA_HOME:-$HOME/.local/share}/icons/hicolor/64x64/apps/goodbyedpi-plus.png"
+rm -f "$APPS_DIR/dpigate.desktop"
+rm -f "${XDG_DATA_HOME:-$HOME/.local/share}/icons/hicolor/64x64/apps/dpigate.png"
 rm -f "${XDG_CONFIG_HOME:-$HOME/.config}/autostart/goodbyedpi-tray.desktop"
 update-desktop-database "$APPS_DIR" 2>/dev/null || true
 gtk-update-icon-cache -f -t "${XDG_DATA_HOME:-$HOME/.local/share}/icons/hicolor" 2>/dev/null || true

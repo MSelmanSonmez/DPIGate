@@ -23,15 +23,15 @@ set -u
 
 APP_DIR="$(cd "$(dirname "$0")" && pwd)"
 for _p in "$APP_DIR/lib/platform.sh" "$APP_DIR/platform.sh" \
-          "$APP_DIR/../share/GoodbyeDPI-Plus/lib/platform.sh"; do
+          "$APP_DIR/../share/DPIGate/lib/platform.sh"; do
     [ -f "$_p" ] && { . "$_p"; break; }
 done
 if [ -z "${PLAT_SH_LOADED:-}" ]; then
     echo "FATAL: lib/platform.sh not found next to $0" >&2; exit 1
 fi
 
-DATA_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/GoodbyeDPI-Plus"
-CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/GoodbyeDPI-Plus"
+DATA_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/DPIGate"
+CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/DPIGate"
 GDPI_LOG="$DATA_DIR/goodbyedpi.log"
 REPORT="$HOME/gdpi-vm-diag.txt"
 

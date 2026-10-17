@@ -22,7 +22,7 @@ Launched by start.sh with these env vars:
   GDPI_DNS_LABEL      — "Name addr:port (Xms)"
   GDPI_DNS_CURRENT    — index of current DNS in candidates list
   GDPI_DNS_INFO       — "name|addr|port|ms|status;name|..." (per candidate)
-  GDPI_CONFIG_DIR     — XDG_CONFIG_HOME/GoodbyeDPI-Plus (systemd unit location)
+  GDPI_CONFIG_DIR     — XDG_CONFIG_HOME/DPIGate (systemd unit location)
 """
 import os
 import sys
@@ -49,14 +49,14 @@ GDPI_DNS_CURRENT = _env_int("GDPI_DNS_CURRENT", -1)
 GDPI_DNS_INFO  = os.environ.get("GDPI_DNS_INFO", "")
 GDPI_BYPASS_ALL = os.environ.get("GDPI_BYPASS_ALL", "") == "1"
 
-# ── Settings persistence (KEY=VALUE file in ~/.config/GoodbyeDPI-Plus) ─────
+# ── Settings persistence (KEY=VALUE file in ~/.config/DPIGate) ─────
 # The tray is the only writer: every menu toggle lands here, and start.sh /
 # tray-launcher.sh read the same file at startup so the choice survives a
 # restart, a logout and a reboot. A missing or corrupt file degrades to {} —
 # losing a preference must never stop the tray from coming up.
 _CONFIG_DIR = os.path.join(
     os.environ.get("XDG_CONFIG_HOME", os.path.expanduser("~/.config")),
-    "GoodbyeDPI-Plus")
+    "DPIGate")
 SETTINGS_FILE = os.path.join(_CONFIG_DIR, "settings")
 
 
@@ -283,7 +283,7 @@ UNINSTALL_SH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "uninsta
 # goodbyedpi PID file — written by start.sh:start_goodbyedpi, used by the
 # restart poll loop to verify the new daemon is alive before quitting.
 _DATA_DIR = os.environ.get("XDG_DATA_HOME", os.path.expanduser("~/.local/share"))
-PID_FILE = os.path.join(_DATA_DIR, "GoodbyeDPI-Plus", "goodbyedpi.pid")
+PID_FILE = os.path.join(_DATA_DIR, "DPIGate", "goodbyedpi.pid")
 
 
 def kill_goodbyedpi(noprompt=False):
@@ -725,7 +725,7 @@ def on_bypass_all_toggle(item):
 def show_notify(msg, icon=None):
     # Prefer theme icon name (works cross-DE), fall back to file path.
     if icon is None:
-        icon = "goodbyedpi-plus"
+        icon = "dpigate"
         if GDPI_ICON and os.path.exists(GDPI_ICON):
             icon = GDPI_ICON
     icon_arg = icon if (icon and ("/" not in icon or os.path.exists(icon))) else "dialog-information"
@@ -786,7 +786,7 @@ def check_alive():
         # ESRCH — no such process. goodbyedpi died → clean up firewall + exit.
         # Read last log lines for debugging (e.g. "nfq_create_queue failed").
         data_dir = os.environ.get("XDG_DATA_HOME", os.path.expanduser("~/.local/share"))
-        log_path = os.path.join(data_dir, "GoodbyeDPI-Plus", "goodbyedpi.log")
+        log_path = os.path.join(data_dir, "DPIGate", "goodbyedpi.log")
         log_tail = ""
         try:
             if os.path.exists(log_path):
@@ -884,12 +884,12 @@ def build_menu():
 def main():
     # Use theme icon name (installed to ~/.local/share/icons/hicolor).
     # Falls back to file path if theme icon not found, then to "network-server".
-    icon_name = "goodbyedpi-plus"
+    icon_name = "dpigate"
     if GDPI_ICON and os.path.exists(GDPI_ICON):
         icon_name = GDPI_ICON  # file path (backward compat)
     global _indicator
     _indicator = AppIndicator.Indicator.new(
-        "GoodbyeDPI-Plus",
+        "DPIGate",
         icon_name,
         AppIndicator.IndicatorCategory.APPLICATION_STATUS,
     )

@@ -21,7 +21,7 @@ PLAT_FWMARK="${PLAT_FWMARK:-0x40000000}"
 PLAT_TABLE="goodbyedpi"          # nft table name
 PLAT_IPT_CHAIN_OUT="GOODBYEDPI_OUT"
 PLAT_IPT_CHAIN_IN="GOODBYEDPI_IN"
-PLAT_LOG="${PLAT_LOG:-${XDG_DATA_HOME:-$HOME/.local/share}/GoodbyeDPI-Plus/platform.log}"
+PLAT_LOG="${PLAT_LOG:-${XDG_DATA_HOME:-$HOME/.local/share}/DPIGate/platform.log}"
 
 if [ ! -d "$(dirname "$PLAT_LOG")" ]; then
     mkdir -p "$(dirname "$PLAT_LOG")" 2>/dev/null || true
@@ -711,7 +711,7 @@ _plat_nft_file() {
         echo "$PLAT_NFT_FILE"; return 0
     fi
     local f
-    for f in "$APP_DIR/goodbyedpi.nft" "$APP_DIR/../share/GoodbyeDPI-Plus/goodbyedpi.nft"; do
+    for f in "$APP_DIR/goodbyedpi.nft" "$APP_DIR/../share/DPIGate/goodbyedpi.nft"; do
         if [ -f "$f" ]; then echo "$f"; return 0; fi
     done
     return 1
@@ -898,7 +898,7 @@ plat_service_available() {
     case "$init" in
         systemd)
             [ "${PLAT_SERVICE_SYSTEM:-0}" = "1" ] && return 0
-            [ -f "$APP_DIR/goodbyedpi.service" ] || [ -f "$APP_DIR/../share/GoodbyeDPI-Plus/goodbyedpi.service" ]
+            [ -f "$APP_DIR/goodbyedpi.service" ] || [ -f "$APP_DIR/../share/DPIGate/goodbyedpi.service" ]
             ;;
         openrc) [ -f "$APP_DIR/service/openrc/goodbyedpi" ] ;;
         runit)  [ -f "$APP_DIR/service/runit/goodbyedpi/run" ] ;;
@@ -910,7 +910,7 @@ _plat_svc_install_systemd_user() {
     local dir="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
     mkdir -p "$dir"
     local src=""
-    for src in "$APP_DIR/goodbyedpi.service" "$APP_DIR/../share/GoodbyeDPI-Plus/goodbyedpi.service"; do
+    for src in "$APP_DIR/goodbyedpi.service" "$APP_DIR/../share/DPIGate/goodbyedpi.service"; do
         [ -f "$src" ] && break
     done
     if [ ! -f "$src" ]; then
@@ -933,9 +933,9 @@ Wants=network-online.target
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-Environment=GDPI_PROGRAMS=/etc/GoodbyeDPI-Plus/ProgramFilters
-ExecStart=/usr/local/lib/GoodbyeDPI-Plus/start.sh --no-tray
-ExecStop=/usr/local/lib/GoodbyeDPI-Plus/kill.sh
+Environment=GDPI_PROGRAMS=/etc/DPIGate/ProgramFilters
+ExecStart=/usr/local/lib/DPIGate/start.sh --no-tray
+ExecStop=/usr/local/lib/DPIGate/kill.sh
 
 [Install]
 WantedBy=multi-user.target

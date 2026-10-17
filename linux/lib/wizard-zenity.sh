@@ -95,7 +95,7 @@ wizard_zenity_main() {
     case " $picked " in *" launch "*) do_launch=1 ;; esac
 
     # ── 4. Ready ────────────────────────────────────────────────────────────
-    local data_dir="${XDG_DATA_HOME:-$HOME/.local/share}/GoodbyeDPI-Plus"
+    local data_dir="${XDG_DATA_HOME:-$HOME/.local/share}/DPIGate"
     rc=0
     zenity --question --title="$title" --width=520 \
         --ok-label="Install" \

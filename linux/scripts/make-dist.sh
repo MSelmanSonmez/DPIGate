@@ -13,11 +13,11 @@
 #
 # Excluded: *.o, prebuilt binaries, __pycache__, .sync-checksums, test bins.
 #
-# Output: goodbyedpi-plus-linux-<distro-or-generic>.tar.gz (in repo root).
+# Output: dpigate-linux-<distro-or-generic>.tar.gz (in repo root).
 
 set -e
 
-APP_NAME="goodbyedpi-plus"
+APP_NAME="dpigate"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 LINUX_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 REPO_DIR="$(cd "$LINUX_DIR/.." && pwd)"

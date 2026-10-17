@@ -342,9 +342,9 @@ class Wizard:
             self.grid_summary.remove(child)
 
         data = os.path.join(os.environ.get(
-            "XDG_DATA_HOME", os.path.expanduser("~/.local/share")), "GoodbyeDPI-Plus")
+            "XDG_DATA_HOME", os.path.expanduser("~/.local/share")), "DPIGate")
         conf = os.path.join(os.environ.get(
-            "XDG_CONFIG_HOME", os.path.expanduser("~/.config")), "GoodbyeDPI-Plus")
+            "XDG_CONFIG_HOME", os.path.expanduser("~/.config")), "DPIGate")
         rows = (
             ("Program files", "path", data),
             ("Configuration", "path", conf),
@@ -619,7 +619,7 @@ class Wizard:
                 and self._will_launch():
             data_dir = os.path.join(os.environ.get(
                 "XDG_DATA_HOME", os.path.expanduser("~/.local/share")),
-                "GoodbyeDPI-Plus")
+                "DPIGate")
             start_sh = os.path.join(data_dir, "start.sh")
             if os.access(start_sh, os.X_OK):
                 env = dict(os.environ)

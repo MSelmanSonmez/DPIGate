@@ -15,7 +15,7 @@ set -e
 
 APP_DIR="$(cd "$(dirname "$0")" && pwd)"
 for _p in "$APP_DIR/lib/platform.sh" "$APP_DIR/platform.sh" \
-          "$APP_DIR/../share/GoodbyeDPI-Plus/lib/platform.sh"; do
+          "$APP_DIR/../share/DPIGate/lib/platform.sh"; do
     [ -f "$_p" ] && { . "$_p"; break; }
 done
 if [ -z "${PLAT_SH_LOADED:-}" ]; then
@@ -99,7 +99,7 @@ if [ "$KILL_PROC" -eq 1 ]; then
         echo "  • goodbyedpi not running."
     fi
     # Remove PID file if present
-    DATA_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/GoodbyeDPI-Plus"
+    DATA_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/DPIGate"
     rm -f "$DATA_DIR/goodbyedpi.pid" 2>/dev/null || true
     # If setcap failed, daemon may have started as root — user-level kill
     # may be insufficient; escalate with cached root ticket (no re-prompt).
@@ -120,7 +120,7 @@ if [ "$KILL_TRAY" -eq 1 ]; then
     echo "[kill] stopping tray..."
     plat_kill_cmdline "$APP_DIR/reaper.sh" || true
     plat_kill_cmdline "$APP_DIR/tray.py" || true
-    plat_kill_cmdline "GoodbyeDPI-Plus/tray.py" || true
+    plat_kill_cmdline "DPIGate/tray.py" || true
     echo "  ✓ tray stopped."
 fi
 
@@ -130,7 +130,7 @@ if [ "$KILL_PROC" -eq 1 ]; then
 fi
 
 # ── Revert DNS override (start.sh changed system DNS upstream) ───
-DATA_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/GoodbyeDPI-Plus"
+DATA_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/DPIGate"
 if [ -f "$DATA_DIR/dns_override" ] && command -v resolvectl >/dev/null 2>&1; then
     _ovr_if="$(cat "$DATA_DIR/dns_override" 2>/dev/null || true)"
     if [ -n "$_ovr_if" ]; then

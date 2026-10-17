@@ -1,7 +1,7 @@
 #!/sbin/openrc-run
 description="DPIGate — DPI bypass with per-program filtering"
-: ${GDPI_DIR:=/usr/local/lib/GoodbyeDPI-Plus}
-: ${GDPI_PROGRAMS:=/etc/GoodbyeDPI-Plus/ProgramFilters}
+: ${GDPI_DIR:=/usr/local/lib/DPIGate}
+: ${GDPI_PROGRAMS:=/etc/DPIGate/ProgramFilters}
 depend() { need net; after firewall; }
 start() {
     ebegin "Starting goodbyedpi"

@@ -56,7 +56,7 @@ same C engine (NFQUEUE + raw sockets instead of WinDivert), not a wrapper.
 
 To remove it: tray icon → **Uninstall**, or **Settings → Apps & features**.
 
-> Everything is copied to `C:\Program Files\GoodByeDPI-Plus`, so the downloaded
+> Everything is copied to `C:\Program Files\DPIGate`, so the downloaded
 > installer can be deleted afterwards. Launching elevates through UAC —
 > `goodbyedpi.exe` needs admin rights to load the WinDivert driver.
 
@@ -70,8 +70,8 @@ git clone https://github.com/MSelmanSonmez/DPIGate.git
 cd DPIGate/linux
 ```
 
-Or download `goodbyedpi-plus-<version>-linux.tar.gz` from the
-[latest release](../../releases/latest), unpack it, and `cd goodbyedpi-plus` —
+Or download `dpigate-<version>-linux.tar.gz` from the
+[latest release](../../releases/latest), unpack it, and `cd dpigate` —
 same contents, no git needed.
 
 **Graphical installer.** Double-click `install.sh` in your file manager, or run
@@ -92,10 +92,10 @@ sudo -v            # refresh the sudo timestamp first — avoids repeated prompt
 ```
 
 Either way, start it afterwards from the application menu or with
-`~/.local/share/GoodbyeDPI-Plus/start.sh`.
+`~/.local/share/DPIGate/start.sh`.
 
 If anything ever looks wrong:
-`~/.local/share/GoodbyeDPI-Plus/kill.sh` — it always restores connectivity.
+`~/.local/share/DPIGate/kill.sh` — it always restores connectivity.
 
 > **Tested distributions.** Hands-on testing has been done on **Fedora, Ubuntu
 > and Arch** only. The installer probes capabilities rather than package names,
@@ -157,8 +157,8 @@ Windows shows a warning balloon if the engine exits unexpectedly; on Linux a
 watchdog checks every 2 seconds and tears the firewall rules down if the daemon
 dies, so a crash can never leave you without a working connection.
 
-Filter list locations: `C:\Program Files\GoodByeDPI-Plus\programs.txt` on
-Windows, `~/.config/GoodbyeDPI-Plus/ProgramFilters` on Linux. One program per
+Filter list locations: `C:\Program Files\DPIGate\programs.txt` on
+Windows, `~/.config/DPIGate/ProgramFilters` on Linux. One program per
 line, `#` for comments.
 
 ---

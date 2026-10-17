@@ -32,7 +32,7 @@ WINSOCK_API_LINKAGE INT WSAAPI inet_pton(INT Family, LPCSTR pStringBuf, PVOID pA
 /* This fork's own version. Bump it here and in windows/setup.iss (AppVersion,
  * VersionInfoVersion, OutputBaseFilename) together — those are the only two
  * places a release version is declared. */
-#define GOODBYEDPI_PLUS_VERSION "2.0.0"
+#define DPIGATE_VERSION "2.0.0"
 
 #define die() do { sleep(20); exit(EXIT_FAILURE); } while (0)
 
@@ -700,7 +700,7 @@ int main(int argc, char *argv[]) {
         filter_passive_string = strdup(FILTER_PASSIVE_STRING_TEMPLATE);
 
     printf(
-        "DPIGate " GOODBYEDPI_PLUS_VERSION
+        "DPIGate " DPIGATE_VERSION
         " (engine: GoodbyeDPI " GOODBYEDPI_VERSION ")\n"
         "Passive DPI blocker and Active DPI circumvention utility\n"
         "https://github.com/ValdikSS/GoodbyeDPI\n\n"

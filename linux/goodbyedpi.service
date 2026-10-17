@@ -25,9 +25,9 @@ Wants=network-online.target
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-ExecStart=%h/.local/share/GoodbyeDPI-Plus/start.sh --no-tray
+ExecStart=%h/.local/share/DPIGate/start.sh --no-tray
 Environment=PLAT_NOPROMPT=1
-ExecStop=%h/.local/share/GoodbyeDPI-Plus/kill.sh
+ExecStop=%h/.local/share/DPIGate/kill.sh
 
 [Install]
 WantedBy=default.target

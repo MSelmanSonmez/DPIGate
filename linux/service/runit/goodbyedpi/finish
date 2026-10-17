@@ -1,2 +1,2 @@
 #!/bin/sh
-exec /usr/local/lib/GoodbyeDPI-Plus/kill.sh --nft
+exec /usr/local/lib/DPIGate/kill.sh --nft

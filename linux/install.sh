@@ -36,7 +36,7 @@
 set -e
 
 # ── Config ───────────────────────────────────────────────────────────────────
-APP_NAME="GoodbyeDPI-Plus"
+APP_NAME="DPIGate"
 DATA_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/$APP_NAME"
 CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/$APP_NAME"
 SYSTEMD_USER_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
@@ -272,14 +272,14 @@ done
 ICON_THEME_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/icons/hicolor/64x64/apps"
 mkdir -p "$ICON_THEME_DIR"
 DESKTOP_ICON="$DATA_DIR/icon.png"     # fallback: absolute path
-if [ -f "$SCRIPT_DIR/icon.png" ] && cp "$SCRIPT_DIR/icon.png" "$ICON_THEME_DIR/goodbyedpi-plus.png"; then
+if [ -f "$SCRIPT_DIR/icon.png" ] && cp "$SCRIPT_DIR/icon.png" "$ICON_THEME_DIR/dpigate.png"; then
     # Theme icon installed — reference by ABSOLUTE path. A bare theme-name
     # Icon= relies on GTK/Cinnamon's icon-theme cache, which on a *fresh*
     # install doesn't monitor a hicolor dir that didn't exist at session
     # start, so the menu entry renders blank until re-login. The absolute
     # path resolves immediately via GFileIcon regardless of cache state.
     # uninstall.sh removes this same file, so it never dangles.
-    DESKTOP_ICON="$ICON_THEME_DIR/goodbyedpi-plus.png"
+    DESKTOP_ICON="$ICON_THEME_DIR/dpigate.png"
     gtk-update-icon-cache -f -t "${XDG_DATA_HOME:-$HOME/.local/share}/icons/hicolor" 2>/dev/null || true
 else
     echo "  WARN: icon.png missing or not installable — menu entry will use $DESKTOP_ICON" >&2
@@ -357,17 +357,17 @@ if [ "$SYSTEM_SERVICE" -eq 1 ]; then
     _sys_rc=0
     plat_run_root sh -c '
         src="$1"
-        mkdir -p /usr/local/lib/GoodbyeDPI-Plus/lib /etc/GoodbyeDPI-Plus
+        mkdir -p /usr/local/lib/DPIGate/lib /etc/DPIGate
         for f in goodbyedpi start.sh kill.sh dns_detect.py goodbyedpi.nft goodbyedpi.service; do
-            [ -f "$src/$f" ] && cp "$src/$f" /usr/local/lib/GoodbyeDPI-Plus/
+            [ -f "$src/$f" ] && cp "$src/$f" /usr/local/lib/DPIGate/
         done
         for f in "$src"/lib/*.sh; do
-            [ -f "$f" ] && cp "$f" /usr/local/lib/GoodbyeDPI-Plus/lib/
+            [ -f "$f" ] && cp "$f" /usr/local/lib/DPIGate/lib/
         done
-        chmod +x /usr/local/lib/GoodbyeDPI-Plus/start.sh \
-                 /usr/local/lib/GoodbyeDPI-Plus/kill.sh \
-                 /usr/local/lib/GoodbyeDPI-Plus/goodbyedpi
-        [ -f /etc/GoodbyeDPI-Plus/ProgramFilters ] || cp "$src/ProgramFilters" /etc/GoodbyeDPI-Plus/ProgramFilters
+        chmod +x /usr/local/lib/DPIGate/start.sh \
+                 /usr/local/lib/DPIGate/kill.sh \
+                 /usr/local/lib/DPIGate/goodbyedpi
+        [ -f /etc/DPIGate/ProgramFilters ] || cp "$src/ProgramFilters" /etc/DPIGate/ProgramFilters
     ' sh "$SCRIPT_DIR" || _sys_rc=$?
     if [ "$_sys_rc" -eq 2 ]; then
         echo "[install] Password prompt cancelled. Install aborted." >&2
@@ -390,7 +390,7 @@ if [ "$SYSTEM_SERVICE" -eq 1 ]; then
         echo "  OK: system service installed (init=$(plat_init_system))"
     else
         echo "  WARN: no service definition available for init=$(plat_init_system) (s6/sysvinit: no service files — see README)." >&2
-        echo "  Manual supervised run: /usr/local/lib/GoodbyeDPI-Plus/start.sh --no-tray --foreground" >&2
+        echo "  Manual supervised run: /usr/local/lib/DPIGate/start.sh --no-tray --foreground" >&2
     fi
 else
     echo "[install] user-mode install — no service installed by default."
@@ -422,7 +422,7 @@ if [ "$DO_SHORTCUT" -eq 1 ]; then
     # in the menu's System section (KDE/XFCE/Cinnamon all render one entry per
     # matching category) — a DPI bypass belongs under Internet/Network, and
     # duplicated menu entries were exactly the reported bug.
-    cat > "$APPS_DIR/goodbyedpi-plus.desktop" <<DESKTOP_EOF
+    cat > "$APPS_DIR/dpigate.desktop" <<DESKTOP_EOF
 [Desktop Entry]
 Type=Application
 Name=DPIGate
@@ -433,8 +433,8 @@ Terminal=false
 Categories=Network;
 StartupNotify=false
 DESKTOP_EOF
-    chmod +x "$APPS_DIR/goodbyedpi-plus.desktop"
-    echo "  OK: start menu shortcut: $APPS_DIR/goodbyedpi-plus.desktop"
+    chmod +x "$APPS_DIR/dpigate.desktop"
+    echo "  OK: start menu shortcut: $APPS_DIR/dpigate.desktop"
     # Update desktop database (best-effort)
     update-desktop-database "$APPS_DIR" 2>/dev/null || true
 else

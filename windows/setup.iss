@@ -41,7 +41,7 @@ VersionInfoProductName=DPIGate
 ; goodbyedpi.exe loads the WinDivert kernel driver - this cannot run as a
 ; standard user, so both install and uninstall require admin.
 PrivilegesRequired=admin
-DefaultDirName={autopf}\GoodByeDPI-Plus
+DefaultDirName={autopf}\DPIGate
 DisableProgramGroupPage=yes
 WizardStyle=modern
 Compression=lzma2/max
@@ -72,7 +72,7 @@ Source: "icon.ico"; DestDir: "{app}"; Flags: ignoreversion
 ;
 ; uninsneveruninstall was deliberately REMOVED: it only ever affected the
 ; uninstaller, and it was the single reason a completed uninstall still left
-; C:\Program Files\GoodByeDPI-Plus behind. Inno removes {app} automatically
+; C:\Program Files\DPIGate behind. Inno removes {app} automatically
 ; once it is empty, and this file was the only thing keeping it populated.
 ; An uninstall is now expected to leave nothing at all, which does mean the
 ; user's filter list goes with it - that is the intended behaviour, not an
@@ -85,8 +85,8 @@ Source: "..\NOTICE"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\README.md"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
-Name: "{autoprograms}\GoodByeDPI-Plus"; Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-ExecutionPolicy Bypass -NoProfile -STA -WindowStyle Hidden -File ""{app}\start.ps1"""; WorkingDir: "{app}"; IconFilename: "{app}\icon.ico"
-Name: "{autodesktop}\GoodByeDPI-Plus"; Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-ExecutionPolicy Bypass -NoProfile -STA -WindowStyle Hidden -File ""{app}\start.ps1"""; WorkingDir: "{app}"; IconFilename: "{app}\icon.ico"; Tasks: desktopicon
+Name: "{autoprograms}\DPIGate"; Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-ExecutionPolicy Bypass -NoProfile -STA -WindowStyle Hidden -File ""{app}\start.ps1"""; WorkingDir: "{app}"; IconFilename: "{app}\icon.ico"
+Name: "{autodesktop}\DPIGate"; Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-ExecutionPolicy Bypass -NoProfile -STA -WindowStyle Hidden -File ""{app}\start.ps1"""; WorkingDir: "{app}"; IconFilename: "{app}\icon.ico"; Tasks: desktopicon
 
 [Run]
 ; Mark the shortcuts created by [Icons] above as "Run as administrator".
@@ -124,7 +124,7 @@ Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-Execution
 ; install.ps1 -TaskOnly is bound to the interactive user. Running as the
 ; original user and letting the shortcut do the elevating keeps every entry
 ; point on one account.
-Filename: "{autoprograms}\GoodByeDPI-Plus.lnk"; Description: "Launch GoodByeDPI-Plus now"; Flags: postinstall nowait skipifsilent shellexec runasoriginaluser
+Filename: "{autoprograms}\DPIGate.lnk"; Description: "Launch DPIGate now"; Flags: postinstall nowait skipifsilent shellexec runasoriginaluser
 
 [UninstallRun]
 ; [UninstallRun] entries execute as the first step of uninstallation -

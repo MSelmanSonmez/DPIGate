@@ -38,8 +38,8 @@ Desktop.ini
 STATUS.md
 
 # make-dist.sh output tarball (written to the repo root)
-/goodbyedpi-plus-*.tar.gz
-/goodbyedpi-plus-linux*.tar.gz
+/dpigate-*.tar.gz
+/dpigate-linux*.tar.gz
 
 # Python bytecode (anywhere, not just linux/)
 __pycache__/

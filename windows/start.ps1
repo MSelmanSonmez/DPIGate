@@ -26,7 +26,7 @@ param(
 $ErrorActionPreference = 'Stop'
 
 # =============================================================================
-# Settings persistence ($env:LOCALAPPDATA\GoodbyeDPI-Plus\settings, KEY=VALUE)
+# Settings persistence ($env:LOCALAPPDATA\DPIGate\settings, KEY=VALUE)
 # Mirrors linux/start.sh's _config_get + linux/tray.py's _load_settings /
 # _save_setting. Missing file, missing key, or an unparseable value always
 # falls back to the caller's default - never throws. Last matching line wins.
@@ -53,7 +53,7 @@ if ([string]::IsNullOrWhiteSpace($localAppData)) {
     try { $localAppData = [Environment]::GetFolderPath('LocalApplicationData') } catch { $localAppData = $null }
 }
 if (-not [string]::IsNullOrWhiteSpace($localAppData)) {
-    $script:SettingsFile = Join-Path $localAppData 'GoodbyeDPI-Plus\settings'
+    $script:SettingsFile = Join-Path $localAppData 'DPIGate\settings'
 }
 
 function Get-GdpiSettingRaw {
@@ -670,7 +670,7 @@ public static class GdpiJobObject {
     # Auto Start toggle
     $autoStartItem = New-Object System.Windows.Forms.ToolStripMenuItem
     $autoStartItem.Text = 'Auto Start'
-    $taskName = 'GoodByeDPI-Plus'
+    $taskName = 'DPIGate'
     # -ErrorAction SilentlyContinue covers "task not found", but NOT the
     # ScheduledTasks module being absent entirely (Windows editions/images
     # that ship without it, or a stripped $env:PSModulePath): that surfaces
@@ -687,7 +687,7 @@ public static class GdpiJobObject {
         }
     } catch { }
     $autoStartItem.Add_Click({
-        $taskName = 'GoodByeDPI-Plus'
+        $taskName = 'DPIGate'
         try {
             if ($this.Checked) {
                 # Disable auto-start
@@ -1149,7 +1149,7 @@ function Find-FastestDns {
 # for contexts where the Global namespace is denied.
 $script:startMutex     = $null
 $script:startMutexHeld = $false
-foreach ($mtxName in @('Global\GoodbyeDPI-Plus-Start', 'Local\GoodbyeDPI-Plus-Start')) {
+foreach ($mtxName in @('Global\DPIGate-Start', 'Local\DPIGate-Start')) {
     try {
         $script:startMutex = New-Object System.Threading.Mutex($false, $mtxName)
         break
@@ -1374,12 +1374,12 @@ if ($enableTray) {
     # fails, $readyEventName goes empty - the tray is then launched without
     # -ReadyEvent and the wait is skipped entirely rather than failing a tray
     # that is probably fine.
-    $readyEventName = "Global\GoodbyeDPI-Plus-TrayReady-$([guid]::NewGuid().ToString('N'))"
+    $readyEventName = "Global\DPIGate-TrayReady-$([guid]::NewGuid().ToString('N'))"
     $readyEvent = $null
     try {
         $readyEvent = New-Object System.Threading.EventWaitHandle($false, [System.Threading.EventResetMode]::ManualReset, $readyEventName)
     } catch {
-        $readyEventName = 'Local\GoodbyeDPI-Plus-TrayReady-' + [guid]::NewGuid().ToString('N')
+        $readyEventName = 'Local\DPIGate-TrayReady-' + [guid]::NewGuid().ToString('N')
         try {
             $readyEvent = New-Object System.Threading.EventWaitHandle($false, [System.Threading.EventResetMode]::ManualReset, $readyEventName)
         } catch {

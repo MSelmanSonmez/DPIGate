@@ -166,7 +166,7 @@ if ($ElevateShortcuts) {
         try {
             $dir = [Environment]::GetFolderPath($folder)
             if (-not $dir) { continue }
-            Set-ShortcutRunAsAdmin -Path (Join-Path $dir 'GoodByeDPI-Plus.lnk') | Out-Null
+            Set-ShortcutRunAsAdmin -Path (Join-Path $dir 'DPIGate.lnk') | Out-Null
         } catch { }
     }
     return
@@ -188,7 +188,7 @@ if ($TaskOnly) {
     # user (see below): the tray already runs inside the target user's own
     # session, whereas Setup may have been elevated with someone else's
     # credentials.
-    $taskName = 'GoodByeDPI-Plus'
+    $taskName = 'DPIGate'
 
     # Refuse to point an elevated logon task at a script anyone can rewrite.
     # Skip ONLY the task here rather than failing the whole invocation: this
@@ -245,7 +245,7 @@ if (Test-Path -LiteralPath $oldStartupShortcut) {
 }
 
 # Create Start Menu shortcut
-$startMenuPath = Join-Path ([Environment]::GetFolderPath('Programs')) 'GoodByeDPI-Plus.lnk'
+$startMenuPath = Join-Path ([Environment]::GetFolderPath('Programs')) 'DPIGate.lnk'
 $shell = New-Object -ComObject WScript.Shell
 $shortcut = $shell.CreateShortcut($startMenuPath)
 $shortcut.TargetPath = 'powershell.exe'

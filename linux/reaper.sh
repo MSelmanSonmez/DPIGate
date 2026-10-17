@@ -15,7 +15,7 @@ set -e
 
 APP_DIR="$(cd "$(dirname "$0")" && pwd)"
 for _p in "$APP_DIR/lib/platform.sh" "$APP_DIR/platform.sh" \
-          "$APP_DIR/../share/GoodbyeDPI-Plus/lib/platform.sh"; do
+          "$APP_DIR/../share/DPIGate/lib/platform.sh"; do
     [ -f "$_p" ] && { . "$_p"; break; }
 done
 if [ -z "${PLAT_SH_LOADED:-}" ]; then
@@ -29,7 +29,7 @@ esac
 
 # PLAT_STATE_DIR override keeps this testable without root (single state-dir
 # namespace shared with the other scripts).
-DATA_DIR="${PLAT_STATE_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/GoodbyeDPI-Plus}"
+DATA_DIR="${PLAT_STATE_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/DPIGate}"
 RESTART_MARKER="$DATA_DIR/restart.pid"
 REAPER_LOG="$DATA_DIR/reaper.log"
 mkdir -p "$DATA_DIR" 2>/dev/null || true

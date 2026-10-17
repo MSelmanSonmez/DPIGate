@@ -36,7 +36,7 @@ fi
 if pgrep -x goodbyedpi >/dev/null 2>&1; then
     echo "PRECONDITION FAILED: goodbyedpi is running."
     echo "  start.sh refuses a duplicate start, so its tests would abort early."
-    echo "  Stop it first:  ~/.local/share/GoodbyeDPI-Plus/kill.sh"
+    echo "  Stop it first:  ~/.local/share/DPIGate/kill.sh"
     exit 2
 fi
 if [ ! -x "$REPO/goodbyedpi" ]; then
@@ -69,8 +69,8 @@ cp "$REPO/lib/platform.sh" "$APP/lib/platform.sh"
 chmod +x "$APP"/*.sh "$APP"/*.py
 ln -sf "$REPO/goodbyedpi" "$APP/goodbyedpi"
 
-CONFIG_DIR="$SANDBOX/.config/GoodbyeDPI-Plus"
-DATA_DIR="$SANDBOX/.local/share/GoodbyeDPI-Plus"
+CONFIG_DIR="$SANDBOX/.config/DPIGate"
+DATA_DIR="$SANDBOX/.local/share/DPIGate"
 SETTINGS="$CONFIG_DIR/settings"
 FILTERS="$CONFIG_DIR/ProgramFilters"
 STAMP="$CONFIG_DIR/.ProgramFilters.shipped"

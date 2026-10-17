@@ -28,7 +28,7 @@ foreach ($taskName in @('GoodbyeDPI', 'GoodByeDPI-Plus')) {
 }
 
 # Remove Start Menu shortcut
-$startMenuShortcut = Join-Path ([Environment]::GetFolderPath('Programs')) 'GoodByeDPI-Plus.lnk'
+$startMenuShortcut = Join-Path ([Environment]::GetFolderPath('Programs')) 'DPIGate.lnk'
 if (Test-Path -LiteralPath $startMenuShortcut) {
     Remove-Item -LiteralPath $startMenuShortcut -Force
 }
@@ -84,7 +84,7 @@ try {
     }
 } catch { }
 
-# Per-user settings written by start.ps1 ($env:LOCALAPPDATA\GoodbyeDPI-Plus).
+# Per-user settings written by start.ps1 ($env:LOCALAPPDATA\DPIGate).
 # Nothing ever removed this - not Inno, not this script - so it survived
 # every uninstall path.
 #
@@ -95,13 +95,13 @@ try {
 # unaffected by elevation, so resolve their profile too and clear both.
 # (install.ps1 already reasons the same way when it picks the task user.)
 $settingsDirs = New-Object System.Collections.Generic.List[string]
-if ($env:LOCALAPPDATA) { $settingsDirs.Add((Join-Path $env:LOCALAPPDATA 'GoodbyeDPI-Plus')) }
+if ($env:LOCALAPPDATA) { $settingsDirs.Add((Join-Path $env:LOCALAPPDATA 'DPIGate')) }
 try {
     $interactiveUser = (Get-CimInstance Win32_ComputerSystem -ErrorAction Stop).UserName
     if ($interactiveUser) {
         $sid = (New-Object Security.Principal.NTAccount($interactiveUser)).Translate([Security.Principal.SecurityIdentifier]).Value
         $profilePath = (Get-ItemProperty -LiteralPath "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList\$sid" -Name 'ProfileImagePath' -ErrorAction Stop).ProfileImagePath
-        if ($profilePath) { $settingsDirs.Add((Join-Path $profilePath 'AppData\Local\GoodbyeDPI-Plus')) }
+        if ($profilePath) { $settingsDirs.Add((Join-Path $profilePath 'AppData\Local\DPIGate')) }
     }
 } catch { }
 foreach ($settingsDir in ($settingsDirs | Select-Object -Unique)) {

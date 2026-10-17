@@ -114,8 +114,8 @@ sudo -v                     # refresh the sudo timestamp (see below)
 ```
 
 `install.sh`, in order: installs missing dependencies → `make clean && make` →
-copies the runtime files under `~/.local/share/GoodbyeDPI-Plus/` → seeds
-`~/.config/GoodbyeDPI-Plus/ProgramFilters` (never overwriting an existing one) →
+copies the runtime files under `~/.local/share/DPIGate/` → seeds
+`~/.config/DPIGate/ProgramFilters` (never overwriting an existing one) →
 `setcap cap_net_raw,cap_net_admin+ep` on the binary → loads the firewall rules →
 writes the application-menu entry. It does **not** start anything unless you pass
 `--start`.
@@ -166,11 +166,11 @@ terminal. Force either mode with `--gui` / `--cli`.
 
 | Path | What |
 |---|---|
-| `~/.local/share/GoodbyeDPI-Plus/` | `goodbyedpi` binary, `start.sh`, `kill.sh`, `uninstall.sh`, `reaper.sh`, `tray.py`, `tray-launcher.sh`, `dns_detect.py`, `goodbyedpi.nft`, `goodbyedpi.service`, `icon.png`, `lib/`, logs |
-| `~/.config/GoodbyeDPI-Plus/ProgramFilters` | the per-program filter list you edit |
-| `~/.local/share/applications/goodbyedpi-plus.desktop` | menu entry (`Categories=Network;` only, so it appears once, under Internet/Network) |
-| `~/.local/share/icons/hicolor/64x64/apps/goodbyedpi-plus.png` | menu/tray icon |
-| `/usr/local/lib/GoodbyeDPI-Plus/`, `/etc/GoodbyeDPI-Plus/ProgramFilters` | additional root-mode layout, only with `--system` |
+| `~/.local/share/DPIGate/` | `goodbyedpi` binary, `start.sh`, `kill.sh`, `uninstall.sh`, `reaper.sh`, `tray.py`, `tray-launcher.sh`, `dns_detect.py`, `goodbyedpi.nft`, `goodbyedpi.service`, `icon.png`, `lib/`, logs |
+| `~/.config/DPIGate/ProgramFilters` | the per-program filter list you edit |
+| `~/.local/share/applications/dpigate.desktop` | menu entry (`Categories=Network;` only, so it appears once, under Internet/Network) |
+| `~/.local/share/icons/hicolor/64x64/apps/dpigate.png` | menu/tray icon |
+| `/usr/local/lib/DPIGate/`, `/etc/DPIGate/ProgramFilters` | additional root-mode layout, only with `--system` |
 
 Because `uninstall.sh` is installed alongside the binary, you can remove the
 program later even if you delete the source tree.
@@ -202,7 +202,7 @@ is missing. KDE Plasma, Cinnamon, MATE and Xfce need no extension.
 From the application menu ("DPIGate", under Internet/Network), or:
 
 ```bash
-~/.local/share/GoodbyeDPI-Plus/start.sh
+~/.local/share/DPIGate/start.sh
 ```
 
 A password prompt appears because loading the firewall rules needs root. The tray
@@ -271,7 +271,7 @@ tray cleans up the firewall rules and reports the tail of the log.
 
 ## Choosing which programs get bypassed
 
-The list is `~/.config/GoodbyeDPI-Plus/ProgramFilters` (one entry per line, `#`
+The list is `~/.config/DPIGate/ProgramFilters` (one entry per line, `#`
 for comments), and it hot-reloads within ~2 seconds of saving — no restart. The
 shipped file already covers the common browsers, Discord clients and chat apps.
 
@@ -293,7 +293,7 @@ Electron apps run from a shared runtime — on Arch and Fedora the process exe i
 argument. Both of these therefore match Vesktop:
 
 ```
-# ~/.config/GoodbyeDPI-Plus/ProgramFilters
+# ~/.config/DPIGate/ProgramFilters
 vesktop                     # bare name: matched as a whole path component of
                             # the cmdline ("… /usr/lib/vesktop/app.asar")
 /usr/lib/vesktop/           # path entry: substring of exe OR cmdline
@@ -329,12 +329,12 @@ of your GUI session.
 
 > Autostart still needs root once per login for the firewall rules. If you miss
 > or cancel that password prompt, the tray appears and the daemon runs but no
-> packets are queued. `~/.local/share/GoodbyeDPI-Plus/tray-launcher.sh --check`
+> packets are queued. `~/.local/share/DPIGate/tray-launcher.sh --check`
 > reports the state (`Firewall: LOAD FAILED`); run `start.sh` from a terminal to
 > fix it.
 
 **System mode (`./install.sh --system`).** Files are staged to
-`/usr/local/lib/GoodbyeDPI-Plus/` and `/etc/GoodbyeDPI-Plus/ProgramFilters`, and
+`/usr/local/lib/DPIGate/` and `/etc/DPIGate/ProgramFilters`, and
 a real service is installed for whichever init the host runs:
 
 - **systemd** — a system unit running as root
@@ -345,7 +345,7 @@ s6 and sysvinit have no shipped service definition; wrap the documented
 foreground path yourself:
 
 ```bash
-/usr/local/lib/GoodbyeDPI-Plus/start.sh --no-tray --foreground
+/usr/local/lib/DPIGate/start.sh --no-tray --foreground
 ```
 
 ---
@@ -354,7 +354,7 @@ foreground path yourself:
 
 ```bash
 grep -E 'loaded [0-9]+ programs|Block QUIC/HTTP3|NFQUEUE queue' \
-     ~/.local/share/GoodbyeDPI-Plus/goodbyedpi.log
+     ~/.local/share/DPIGate/goodbyedpi.log
 sudo nft list table inet goodbyedpi
 curl -sS -o /dev/null -w '%{http_code}\n' --max-time 8 https://www.google.com/
 ```
@@ -368,13 +368,13 @@ Then open a previously blocked site in a browser. If it still does not load,
 check that the program is actually on the list:
 
 ```bash
-grep -n -i -E 'firefox|chrome|vesktop|discord' ~/.config/GoodbyeDPI-Plus/ProgramFilters
+grep -n -i -E 'firefox|chrome|vesktop|discord' ~/.config/DPIGate/ProgramFilters
 ```
 
 Add a line (executable name or path) and save — it takes effect immediately.
 
 For a per-packet view, run `start.sh --debug-proc` and watch
-`~/.local/share/GoodbyeDPI-Plus/goodbyedpi.log`. Remember the `[GATE]` wording is
+`~/.local/share/DPIGate/goodbyedpi.log`. Remember the `[GATE]` wording is
 about the filter, not the firewall: `PASS` = on the list = bypass applied,
 `BLOCK` = not on the list = traffic left untouched.
 
@@ -386,9 +386,9 @@ traffic, so `sudo curl`, a root browser or a root shell measure nothing.
 ## Stopping the bypass
 
 ```bash
-~/.local/share/GoodbyeDPI-Plus/kill.sh          # firewall rules + daemon + tray
-~/.local/share/GoodbyeDPI-Plus/kill.sh --nft    # firewall rules only
-~/.local/share/GoodbyeDPI-Plus/kill.sh --proc   # daemon only
+~/.local/share/DPIGate/kill.sh          # firewall rules + daemon + tray
+~/.local/share/DPIGate/kill.sh --nft    # firewall rules only
+~/.local/share/DPIGate/kill.sh --proc   # daemon only
 ```
 
 `kill.sh` **restores** connectivity, it never cuts it — when the table/chain is
@@ -400,13 +400,13 @@ anything looks wrong. The tray's **Exit** item does the same teardown.
 ## Uninstall
 
 ```bash
-~/.local/share/GoodbyeDPI-Plus/uninstall.sh
+~/.local/share/DPIGate/uninstall.sh
 ```
 
 (or `./uninstall.sh` from the source tree — same script). It stops the daemon and
 tray, unloads the firewall rules, removes the service and autostart entries, the
-menu entry and icon, and deletes both `~/.local/share/GoodbyeDPI-Plus/` and
-`~/.config/GoodbyeDPI-Plus/` — **including your edited `ProgramFilters`**. Back it
+menu entry and icon, and deletes both `~/.local/share/DPIGate/` and
+`~/.config/DPIGate/` — **including your edited `ProgramFilters`**. Back it
 up first if you want to keep it. The tray's **Uninstall** item runs the same
 script.
 
@@ -448,10 +448,10 @@ files — the target builds them itself):
 
 ```bash
 cd linux
-./scripts/make-dist.sh      # -> <repo>/goodbyedpi-plus-linux.tar.gz
+./scripts/make-dist.sh      # -> <repo>/dpigate-linux.tar.gz
 ```
 
-Unpack it on the target, `cd goodbyedpi-plus`, and continue from
+Unpack it on the target, `cd dpigate`, and continue from
 [Install](#install).
 
 CI runs `install.sh --check-only` in containers for Debian 12, Ubuntu 24.04,
@@ -463,19 +463,19 @@ push that touches `linux/` — see
 
 ## Troubleshooting
 
-Logs: daemon `~/.local/share/GoodbyeDPI-Plus/goodbyedpi.log`,
-privilege/firewall `~/.local/share/GoodbyeDPI-Plus/platform.log`.
+Logs: daemon `~/.local/share/DPIGate/goodbyedpi.log`,
+privilege/firewall `~/.local/share/DPIGate/platform.log`.
 
 | Symptom | Cause / fix |
 |---|---|
-| Internet is gone | `~/.local/share/GoodbyeDPI-Plus/kill.sh` — always safe, always first |
-| Clicking the menu entry does nothing | Failures are reported as desktop notifications; to see the reason run `~/.local/share/GoodbyeDPI-Plus/start.sh` from a terminal |
+| Internet is gone | `~/.local/share/DPIGate/kill.sh` — always safe, always first |
+| Clicking the menu entry does nothing | Failures are reported as desktop notifications; to see the reason run `~/.local/share/DPIGate/start.sh` from a terminal |
 | No tray icon on GNOME | Install the *AppIndicator and KStatusNotifierItem Support* extension (ID 615). Not needed on KDE/Cinnamon/MATE/Xfce |
 | No tray icon on KDE/Wayland | `sudo dnf install -y libayatana-appindicator-gtk3` (or your distro's equivalent) and restart — the `Gtk.StatusIcon` fallback is invisible on Wayland |
 | No tray icon, bypass works | PyGObject/AppIndicator missing: `python3-gi gir1.2-gtk-3.0 gir1.2-ayatanaappindicator3-0.1` (apt) or `python3-gobject gtk3 libayatana-appindicator-gtk3` (dnf). Otherwise use `--no-tray` |
 | A separate password window at every step | Run `sudo -v`, then retry `install.sh`/`start.sh` within the timestamp window |
 | `plat_run_root failed … via none` | Neither a fresh `sudo` nor `pkexec` is available: run `sudo -v` and retry |
-| `nfq_create_queue(200) failed` | An old instance still owns the queue: `kill.sh`, then `start.sh`. If the log says `Operation not permitted`, the capabilities were lost: `sudo setcap cap_net_raw,cap_net_admin+ep ~/.local/share/GoodbyeDPI-Plus/goodbyedpi` |
+| `nfq_create_queue(200) failed` | An old instance still owns the queue: `kill.sh`, then `start.sh`. If the log says `Operation not permitted`, the capabilities were lost: `sudo setcap cap_net_raw,cap_net_admin+ep ~/.local/share/DPIGate/goodbyedpi` |
 | `missing: libnetfilter_queue/libnfnetlink/libmnl` | Install the dev packages listed in [requirements](#requirements), then re-run `./install.sh` |
 | Firewall rule loading warning | Install `nftables` and/or `iptables` and retry. To force a backend: `GDPI_FW_BACKEND=iptables ./start.sh` |
 | Bypass stopped after `firewall-cmd --reload` | The reload rebuilds every nftables table, dropping `inet goodbyedpi`. Run `start.sh` again |
