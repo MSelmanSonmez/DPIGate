@@ -340,8 +340,12 @@ fi
 # ── Kill existing goodbyedpi + tray ──────────────────────────────────────────
 if [ -f "$PID_FILE" ]; then
     OLD_PID="$(cat "$PID_FILE" 2>/dev/null || true)"
-    if [ -n "$OLD_PID" ] && kill -0 "$OLD_PID" 2>/dev/null; then
-        kill "$OLD_PID" 2>/dev/null || true
+    # kill -0 is EPERM for a daemon a previous run started as root via the
+    # sudo fallback, so test /proc; escalate only for a real goodbyedpi.
+    if [ -n "$OLD_PID" ] && [ -d "/proc/$OLD_PID" ]; then
+        kill "$OLD_PID" 2>/dev/null \
+            || { [ "$(cat "/proc/$OLD_PID/comm" 2>/dev/null || true)" = "goodbyedpi" ] \
+                 && plat_run_root kill "$OLD_PID"; } || true
         sleep 0.3
     fi
     rm -f "$PID_FILE"
@@ -350,7 +354,11 @@ fi
 # kill, and would otherwise run kill.sh against the daemon we are starting.
 plat_kill_cmdline "$APP_DIR/reaper.sh" || true
 plat_kill_cmdline "DPIGate/reaper.sh" || true
-for _p in $(plat_gdpi_pids); do kill "$_p" 2>/dev/null || true; done
+# Root fallback: a root-owned daemon (sudo fallback below) ignores a user kill
+# (EPERM), keeps queue $PLAT_QUEUE_NUM busy and the new daemon cannot bind.
+for _p in $(plat_gdpi_pids); do
+    kill "$_p" 2>/dev/null || plat_run_root kill "$_p" || true
+done
 # Exact-path patterns: a bare "tray.py" also TERMs `vim …/tray.py` and friends.
 plat_kill_cmdline "$APP_DIR/tray.py" || true
 plat_kill_cmdline "DPIGate/tray.py" || true
