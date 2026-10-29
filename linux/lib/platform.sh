@@ -944,6 +944,16 @@ Wants=network-online.target
 Type=oneshot
 RemainAfterExit=yes
 Environment=GDPI_PROGRAMS=/etc/DPIGate/ProgramFilters
+# System units get no $HOME without User=; start.sh/platform.sh keep their
+# pid/log files under $HOME/.local/share, which would become /.local/share.
+Environment=HOME=/root
+# Hardening. Caps: NET_ADMIN/NET_RAW for nft + NFQUEUE + raw sockets,
+# SYS_MODULE for plat_fw_preflight's modprobe, SYS_PTRACE + DAC_READ_SEARCH
+# for proctrack reading other users' /proc/<pid>/exe and /proc/<pid>/fd.
+NoNewPrivileges=yes
+ProtectSystem=full
+PrivateTmp=yes
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_RAW CAP_SYS_MODULE CAP_SYS_PTRACE CAP_DAC_READ_SEARCH
 ExecStart=/usr/local/lib/DPIGate/start.sh --no-tray
 ExecStop=/usr/local/lib/DPIGate/kill.sh
 
