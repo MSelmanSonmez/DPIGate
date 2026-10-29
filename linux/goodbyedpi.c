@@ -906,6 +906,13 @@ int main(int argc, char *argv[]) {
         die();
     }
 
+    /* Seed before the queue opens: once NFQUEUE is bound, every queued
+     * HTTP/HTTPS/DNS packet waits until the /proc scan finishes. */
+    if (do_only_programs) {
+        printf("Per-program mode: seeding existing connections...\n");
+        proctrack_seed();
+    }
+
     puts("\nOpening NFQUEUE");
     if (pio_init(queue_num) < 0) {
         die();
@@ -916,13 +923,11 @@ int main(int argc, char *argv[]) {
         pio_deinit();
         exit(EXIT_SUCCESS);
     }
-    printf("NFQUEUE queue %d activated, GoodbyeDPI is now running!\n", queue_num);
+    printf("NFQUEUE queue %d activated, DPIGate is now running!\n", queue_num);
     signal(SIGINT, sig_handler);
     signal(SIGTERM, sig_handler);
 
     if (do_only_programs) {
-        printf("Per-program mode: seeding existing connections...\n");
-        proctrack_seed();
         proctrack_start_watcher_thread();
     }
     fflush(stdout);
