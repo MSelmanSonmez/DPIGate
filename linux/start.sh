@@ -68,6 +68,10 @@ SETTINGS_FILE="$CONFIG_DIR/settings"
 PID_FILE="$DATA_DIR/goodbyedpi.pid"
 RESTART_MARKER="$DATA_DIR/restart.pid"
 GDPI_LOG="$DATA_DIR/goodbyedpi.log"
+# lib/platform.sh appends to $PLAT_LOG forever; keep one 1 MiB generation.
+if [ -f "$PLAT_LOG" ] && [ "$(stat -c %s "$PLAT_LOG" 2>/dev/null || echo 0)" -gt 1048576 ]; then
+    mv -f "$PLAT_LOG" "$PLAT_LOG.1" 2>/dev/null || true
+fi
 # _config_get KEY DEFAULT — read a KEY=VALUE line from the settings file
 # ($CONFIG_DIR/settings, written by the tray). Echoes DEFAULT when the file,
 # the key, or the value is missing; last occurrence wins.
