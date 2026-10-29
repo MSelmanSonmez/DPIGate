@@ -775,7 +775,7 @@ def on_uninstall(item):
 
 
 def on_exit(item):
-    show_notify("Exiting — cleaning up goodbyedpi + firewall rules")
+    show_notify("Exiting — cleaning up DPIGate engine + firewall rules")
     if not _teardown():
         # _teardown released the guards, so the tray is fully live again:
         # watchdog armed, menu usable, bypass untouched.
@@ -807,7 +807,7 @@ def check_alive():
                     log_tail = "".join(lines[-3:]).strip().replace("\n", " | ")
         except Exception:
             pass
-        msg = "goodbyedpi exited unexpectedly"
+        msg = "DPIGate engine exited unexpectedly"
         if log_tail:
             msg += f"\n{log_tail}"
         # Only the timer stops (return False). _shutting_down stays clear so a
@@ -907,7 +907,7 @@ def main():
         AppIndicator.IndicatorCategory.APPLICATION_STATUS,
     )
     ind = _indicator
-    ind.set_title("GoodbyeDPI")
+    ind.set_title("DPIGate")
     ind.set_status(AppIndicator.IndicatorStatus.ACTIVE)
     ind.set_menu(build_menu())
 

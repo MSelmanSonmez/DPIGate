@@ -1168,7 +1168,7 @@ ind = AppIndicator.Indicator.new(
     "goodbyedpi-on",
     AppIndicator.IndicatorCategory.APPLICATION_STATUS,
 )
-ind.set_title("GoodbyeDPI")
+ind.set_title("DPIGate")
 ind.set_status(AppIndicator.IndicatorStatus.ACTIVE)
 ind.set_menu(Gtk.Menu())
 ```
