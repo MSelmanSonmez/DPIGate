@@ -270,6 +270,9 @@ _watchdog_tick = 0
 _restart_token = 0
 # Poll attempt counter for restart PID verification (_poll_restart).
 _restart_attempt = 0
+# The start.sh --restart child, so _poll_restart can tell "still waiting at
+# the password prompt" from "exited without producing a new daemon".
+_restart_proc = None
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
@@ -381,7 +384,7 @@ def restart_start_sh(force_dns_index=None, bypass_all=None):
     resolves CONFIG_DIR to the user's ~/.config — keeping the same
     ProgramFilters the original launch used. Running start.sh via sudo
     here would flip HOME to /root and switch to the wrong config dir."""
-    global _shutting_down, _restart_token, _restart_attempt
+    global _shutting_down, _restart_token, _restart_attempt, _restart_proc
     _shutting_down = True
     _restart_token += 1
     _restart_attempt = 0
@@ -402,25 +405,29 @@ def restart_start_sh(force_dns_index=None, bypass_all=None):
         args.append("--bypass-all" if bypass_all else "--no-bypass-all")
     args.append("--restart")
     try:
-        subprocess.Popen(args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                         start_new_session=True)
+        _restart_proc = subprocess.Popen(args, stdout=subprocess.DEVNULL,
+                                         stderr=subprocess.DEVNULL,
+                                         start_new_session=True)
     except OSError:
         show_notify("Cannot restart — start.sh is not executable", "dialog-warning")
         _shutting_down = False
         _restart_token -= 1
         _run_revert()
         return
-    # Poll for new goodbyedpi PID (up to 5s). If the new daemon is up, quit
-    # normally so the new tray takes over. If start.sh fails, show error and
-    # stay alive (the old daemon is still running).
+    # Poll for new goodbyedpi PID while start.sh runs. If the new daemon is
+    # up, quit normally so the new tray takes over. If start.sh fails, show
+    # error and stay alive (the old daemon is still running).
     GLib.timeout_add(200, _poll_restart)
 
 
 def _poll_restart():
     """GLib timeout callback: poll for new goodbyedpi PID after restart.
     Returns True to keep polling, False to stop.
-    After ~5 seconds (25 × 200ms) the old tray stays alive and shows a
-    notification (the old daemon is presumably still running)."""
+    Keeps polling while start.sh is alive — it may sit at the password prompt
+    for a long time, and giving up early would re-arm _teardown, so the
+    SIGTERM start.sh later sends this tray would run kill.sh concurrently with
+    the new start.sh. Gives up only when start.sh exits without a new daemon
+    (or after ~5 minutes: 1500 × 200ms)."""
     global _restart_attempt, _shutting_down, _restart_token
     _restart_attempt += 1
     try:
@@ -433,7 +440,12 @@ def _poll_restart():
             return False
     except (FileNotFoundError, ValueError, OSError):
         pass
-    if _restart_attempt >= 25:
+    rc = _restart_proc.poll() if _restart_proc is not None else 1
+    if rc == 0:
+        # start.sh finished successfully; the new tray supersedes this one.
+        Gtk.main_quit()
+        return False
+    if rc is not None or _restart_attempt >= 1500:
         # start.sh never produced a new daemon: cancelled password dialog,
         # missing binary, ... Reset the guards so the crash watchdog resumes
         # and the tray stays open, and undo the choice that was persisted in
@@ -774,7 +786,7 @@ def on_exit(item):
 
 # ── Crash watchdog ────────────────────────────────────────────────────────────
 def check_alive():
-    global _shutting_down, _watchdog_tick
+    global _watchdog_tick
     if _shutting_down or GDPI_PID <= 0:
         return True
     try:
@@ -798,7 +810,8 @@ def check_alive():
         msg = "goodbyedpi exited unexpectedly"
         if log_tail:
             msg += f"\n{log_tail}"
-        _shutting_down = True
+        # Only the timer stops (return False). _shutting_down stays clear so a
+        # later Exit/logout still runs the teardown for the leftover rules/DNS.
         show_notify(msg, "dialog-warning")
         return False
 
