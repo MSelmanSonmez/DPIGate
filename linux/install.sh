@@ -388,8 +388,13 @@ if [ "$SYSTEM_SERVICE" -eq 1 ]; then
             [ -f "$f" ] && cp "$f" /usr/local/lib/DPIGate/lib/
         done
         chmod +x /usr/local/lib/DPIGate/start.sh \
-                 /usr/local/lib/DPIGate/kill.sh \
-                 /usr/local/lib/DPIGate/goodbyedpi
+                 /usr/local/lib/DPIGate/kill.sh
+        # The root daemon needs no file caps; a 755 binary carrying
+        # cap_net_raw/cap_net_admin would let any local user grab the queue.
+        chmod 0700 /usr/local/lib/DPIGate/goodbyedpi
+        if command -v setcap >/dev/null 2>&1; then
+            setcap -r /usr/local/lib/DPIGate/goodbyedpi 2>/dev/null || true
+        fi
         # GoodByeDPI-Plus root layout: keep the system filter list, drop the old runtime copy
         if [ -f /etc/GoodbyeDPI-Plus/ProgramFilters ] && [ ! -f /etc/DPIGate/ProgramFilters ]; then
             cp /etc/GoodbyeDPI-Plus/ProgramFilters /etc/DPIGate/ProgramFilters

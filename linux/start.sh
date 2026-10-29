@@ -551,7 +551,9 @@ fi
 # Set caps so goodbyedpi can bind NFQUEUE as a regular user, avoiding the
 # sudo-wrapper pitfalls (SIGHUP death on start.sh exit, wrong PID tracking).
 GDPI_HAS_CAPS=0
-if command -v setcap >/dev/null 2>&1; then
+# Root needs no caps; setcap here would leave a capability-holding binary
+# that any local user may run (the --system copy is root-only, see install.sh).
+if [ "$(id -u)" -ne 0 ] && command -v setcap >/dev/null 2>&1; then
     _cap_rc=0
     plat_run_root setcap cap_net_raw,cap_net_admin+ep "$GOODBYEDPI_BIN" || _cap_rc=$?
     if [ "$_cap_rc" -eq 2 ]; then
