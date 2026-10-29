@@ -72,8 +72,10 @@ if [ -f "$PID_FILE" ]; then
 fi
 plat_kill_cmdline "--queue $PLAT_QUEUE_NUM" || true
 
-# Kill tray
-plat_kill_cmdline "tray.py" || true
+# Kill tray. Exact-path patterns as in start.sh: a bare "tray.py" also TERMs
+# unrelated processes (`vim …/tray.py`, other projects' trays).
+plat_kill_cmdline "$APP_DIR/tray.py" || true
+plat_kill_cmdline "DPIGate/tray.py" || true
 
 # ── Disable + remove service (systemd/OpenRC/runit) ─────────────────────────
 # A decline on any of these prompts aborts: deleting the files while the
@@ -115,6 +117,13 @@ plat_fw_unload || _fw_rc=$?
 
 # ── Remove files ──────────────────────────────────────────────────────────────
 echo "[uninstall] removing files..."
+# Root-mode layout from install.sh --system (runtime files + system config).
+if [ -d /usr/local/lib/DPIGate ] || [ -d /etc/DPIGate ]; then
+    _sys_rc=0
+    plat_run_root rm -rf /usr/local/lib/DPIGate /etc/DPIGate || _sys_rc=$?
+    [ "$_sys_rc" -eq 2 ] && _svc_cancel
+    [ "$_sys_rc" -eq 0 ] && echo "  Removed system files: /usr/local/lib/DPIGate /etc/DPIGate"
+fi
 rm -rf "$DATA_DIR"
 
 # Desktop integration installed by install.sh / the tray's Auto Start toggle.
