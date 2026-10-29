@@ -145,7 +145,13 @@ if [ -f "$DATA_DIR/dns_override" ] && command -v resolvectl >/dev/null 2>&1; the
         fi
         plat_run_root resolvectl flush-caches >/dev/null 2>&1 || true
     fi
-    rm -f "$DATA_DIR/dns_override" 2>/dev/null || true
+    # Keep the marker when the revert failed (e.g. no root under PLAT_NOPROMPT):
+    # it is the only record that the override is still active.
+    if [ -z "$_ovr_if" ] || [ "$_dns_rc" -eq 0 ]; then
+        rm -f "$DATA_DIR/dns_override" 2>/dev/null || true
+    else
+        echo "[kill] WARN: DNS override not reverted - run kill.sh again with root" >&2
+    fi
 fi
 
 # The bypass is down, so the recorded firewall verdict is no longer true of
