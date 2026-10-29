@@ -415,7 +415,8 @@ plat_root_cmd() {
 #   rc 1 - failed / no escalation mechanism
 #   rc 2 - the user was asked and DECLINED (pkexec dialog dismissed, run0
 #          prompt cancelled). Callers must abort on rc 2 — it means "the
-#          user said stop", never "try something else". Never silently
+#          user said stop", never "try something else". A command's own
+#          exit 2 is reported as rc 1, so 2 is never ambiguous. Never silently
 #          swallows failures with 2>/dev/null.
 #
 # Caveat: pkexec/run0 propagate the CHILD's exit code when authentication
@@ -423,9 +424,11 @@ plat_root_cmd() {
 # indistinguishable from a dismissed dialog. Our root commands (nft, setcap,
 # resolvectl, systemctl, install, package managers) never exit those codes.
 plat_run_root() {
-    local mech rc=0
+    local mech rc=0 what="$*"
+    # Keep log lines short: a sh -c body is a whole script ($3), $4 is its $0.
+    if [ "${1:-}" = sh ] && [ "${2:-}" = "-c" ]; then what="sh -c <script> ${*:5}"; fi
     if ! mech="$(plat_root_cmd)"; then
-        echo "plat_run_root failed (rc=1) via none: $*" | tee -a "$PLAT_LOG" >&2
+        echo "plat_run_root failed (rc=1) via none: $what" | tee -a "$PLAT_LOG" >&2
         return 1
     fi
     case "$mech" in
@@ -438,21 +441,22 @@ plat_run_root() {
             fi
             ;;
         doas)   doas -n "$@" 2>>"$PLAT_LOG" || rc=$? ;;
-        pkexec) pkexec "$@" 2>>"$PLAT_LOG" || rc=$?
-            # pkexec(1): 126 = the dialog was dismissed / authorization
-            # denied; 127 = no authentication agent could be reached.
-            case "$rc" in 126) rc=2 ;; esac
-            ;;
-        run0)   run0 "$@" 2>>"$PLAT_LOG" || rc=$?
-            # run0 (systemd-run): EXIT_CANCELED (125) = the user cancelled
-            # the authentication prompt.
-            case "$rc" in 125) rc=2 ;; esac
-            ;;
+        pkexec) pkexec "$@" 2>>"$PLAT_LOG" || rc=$? ;;
+        run0)   run0 "$@" 2>>"$PLAT_LOG" || rc=$? ;;
+    esac
+    # rc 2 is reserved for "prompt cancelled": a command's own exit 2 (e.g.
+    # `iptables -C` on a missing chain) is an ordinary failure.
+    case "$rc" in 2) rc=1 ;; esac
+    case "$mech:$rc" in
+        # pkexec(1): 126 = the dialog was dismissed / authorization denied
+        # (127 = no authentication agent could be reached).
+        # run0 (systemd-run): EXIT_CANCELED (125) = the prompt was cancelled.
+        pkexec:126|run0:125) rc=2 ;;
     esac
     if [ "$rc" -eq 2 ]; then
-        echo "plat_run_root: escalation prompt cancelled via $mech: $*" | tee -a "$PLAT_LOG" >&2
+        echo "plat_run_root: escalation prompt cancelled via $mech: $what" | tee -a "$PLAT_LOG" >&2
     elif [ "$rc" -ne 0 ]; then
-        echo "plat_run_root failed (rc=$rc) via $mech: $*" | tee -a "$PLAT_LOG" >&2
+        echo "plat_run_root failed (rc=$rc) via $mech: $what" | tee -a "$PLAT_LOG" >&2
     fi
     return "$rc"
 }
@@ -814,7 +818,11 @@ _plat_fw_unload_iptables() {
 # process would currently pick (GDPI_FW_BACKEND is a per-invocation env
 # var, not persisted state), so trusting the preference order here would
 # make unload blind to rules loaded by the other backend.
+# rc 2 - unknown: no root method is usable without prompting (PLAT_NOPROMPT
+#        callers such as the tray watchdog must not treat this as "not loaded"
+#        and retry a load that cannot succeed).
 plat_fw_is_loaded() {
+    plat_root_cmd >/dev/null 2>&1 || return 2
     if command -v nft >/dev/null 2>&1 && plat_run_root nft list table inet goodbyedpi >/dev/null 2>&1; then
         return 0
     fi
@@ -840,6 +848,8 @@ plat_fw_load() {
             # would summon a second dialog after the user said stop.
             return 2
         fi
+        # No root method: iptables would fail the same way, just louder.
+        plat_root_cmd >/dev/null 2>&1 || return 1
         echo "[platform] nft load failed — falling back to iptables" >&2
         command -v iptables >/dev/null 2>&1 || return 1
     fi
