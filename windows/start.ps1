@@ -25,6 +25,14 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+# The logon task runs this script elevated without a UAC prompt. PowerShell
+# auto-loads modules (ScheduledTasks, CimCmdlets, ...) from $env:PSModulePath,
+# whose first entry is the user's own Documents\WindowsPowerShell\Modules, so
+# anything running as the user could plant a same-named module there and get
+# admin rights for free. Pin the path to the admin-only system folders; child
+# powershell.exe processes started below inherit it.
+$env:PSModulePath = "$env:ProgramFiles\WindowsPowerShell\Modules;$env:SystemRoot\System32\WindowsPowerShell\v1.0\Modules"
+
 # =============================================================================
 # Settings persistence ($env:LOCALAPPDATA\DPIGate\settings, KEY=VALUE)
 # Mirrors linux/start.sh's _config_get + linux/tray.py's _load_settings /
@@ -724,7 +732,7 @@ public static class GdpiJobObject {
                     $this.Checked = $false
                     return
                 }
-                $action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument "-ExecutionPolicy Bypass -NoProfile -STA -WindowStyle Hidden -File `"$($script:StartScriptPath)`""
+                $action = New-ScheduledTaskAction -Execute "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -Argument "-ExecutionPolicy Bypass -NoProfile -STA -WindowStyle Hidden -File `"$($script:StartScriptPath)`""
                 $trigger = New-ScheduledTaskTrigger -AtLogOn
                 $principal = New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType Interactive -RunLevel Highest
                 $settings = New-ScheduledTaskSettingsSet -Hidden -ExecutionTimeLimit ([TimeSpan]::Zero) -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries

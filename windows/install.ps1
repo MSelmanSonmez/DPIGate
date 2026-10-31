@@ -222,7 +222,7 @@ if ($TaskOnly) {
         $interactiveUser = (Get-CimInstance Win32_ComputerSystem -ErrorAction Stop).UserName
         if ($interactiveUser) { $taskUser = $interactiveUser }
     } catch { }
-    $taskAction = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument "-ExecutionPolicy Bypass -NoProfile -STA -WindowStyle Hidden -File `"$startPs1`""
+    $taskAction = New-ScheduledTaskAction -Execute "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -Argument "-ExecutionPolicy Bypass -NoProfile -STA -WindowStyle Hidden -File `"$startPs1`""
     $taskTrigger = New-ScheduledTaskTrigger -AtLogOn
     $taskPrincipal = New-ScheduledTaskPrincipal -UserId $taskUser -LogonType Interactive -RunLevel Highest
     $taskSettings = New-ScheduledTaskSettingsSet -Hidden -ExecutionTimeLimit ([TimeSpan]::Zero) -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
