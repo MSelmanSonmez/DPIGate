@@ -321,16 +321,18 @@ int send_fake_https_request(const HANDLE w_filter,
 
 static int fake_add(const unsigned char *data, size_t size) {
     struct fake_t *fake = malloc(sizeof(struct fake_t));
+    if (!fake) return 3;
     fake->size = size;
     fake->data = data;
 
-    for (size_t k = 0; k <= sizeof(fakes) / sizeof(*fakes); k++) {
+    for (size_t k = 0; k < sizeof(fakes) / sizeof(*fakes); k++) {
         if (!fakes[k]) {
             fakes[k] = fake;
             fakes_count++;
             return 0;
         }
     }
+    free(fake);
     return 3;
 }
 
