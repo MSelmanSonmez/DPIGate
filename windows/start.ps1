@@ -124,6 +124,11 @@ function Set-GdpiSettings {
             # be strict right now.
             New-Item -ItemType Directory -Path $dir -Force -ErrorAction Stop | Out-Null
         }
+        # Elevated write into a user-writable folder: refuse to follow a
+        # junction/symlink that would put the file somewhere else.
+        if ((Get-Item -LiteralPath $dir -Force -ErrorAction Stop).Attributes -band [IO.FileAttributes]::ReparsePoint) {
+            return $false
+        }
         $merged = [ordered]@{}
         if (Test-Path -LiteralPath $script:SettingsFile) {
             foreach ($line in Get-Content -LiteralPath $script:SettingsFile -ErrorAction SilentlyContinue) {
