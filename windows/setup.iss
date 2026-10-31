@@ -5,7 +5,7 @@
 ;
 ;   iscc windows\setup.iss
 ;
-; Output lands in windows\setup\DPIGate-1.0.0-setup.exe - OutputDir
+; Output lands in windows\setup\DPIGate-1.0.1-setup.exe - OutputDir
 ; below is relative to this .iss file's own directory, so "setup" means
 ; windows\setup, next to this script.
 ;
@@ -25,16 +25,16 @@
 ; releases or Windows will treat every build as an unrelated install.
 AppId={{5D915276-0BDE-4B2F-B10D-D59243FD02CF}
 AppName=DPIGate
-AppVersion=1.0.0
+AppVersion=1.0.1
 AppPublisher=Selman Sönmez
 AppPublisherURL=https://github.com/MSelmanSonmez/DPIGate
 AppSupportURL=https://github.com/MSelmanSonmez/DPIGate/issues
 AppUpdatesURL=https://github.com/MSelmanSonmez/DPIGate/releases
-UninstallDisplayName=DPIGate 1.0.0
+UninstallDisplayName=DPIGate 1.0.1
 ; File-version metadata for setup.exe itself. Without it the produced
 ; installer has a blank Details tab in Explorer, which users and reputation
 ; systems alike read as a bad sign.
-VersionInfoVersion=1.0.0.0
+VersionInfoVersion=1.0.1.0
 VersionInfoCompany=Selman Sönmez
 VersionInfoDescription=DPIGate Setup
 VersionInfoProductName=DPIGate
@@ -48,7 +48,7 @@ Compression=lzma2/max
 SolidCompression=yes
 SetupIconFile=icon.ico
 UninstallDisplayIcon={app}\icon.ico
-OutputBaseFilename=DPIGate-1.0.0-setup
+OutputBaseFilename=DPIGate-1.0.1-setup
 OutputDir=setup
 LicenseFile=..\LICENSE
 ArchitecturesInstallIn64BitMode=x64compatible

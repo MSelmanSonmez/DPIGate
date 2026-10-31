@@ -3,7 +3,7 @@
 <!-- shields.io cannot read a private repo; version is static and CI uses GitHub's own badges until the repo is public. -->
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux-lightgrey)](#quick-start)
-[![Version](https://img.shields.io/badge/version-1.0.0-success)](../../releases)
+[![Version](https://img.shields.io/badge/version-1.0.1-success)](../../releases)
 [![Windows build](https://github.com/MSelmanSonmez/DPIGate/actions/workflows/build.yml/badge.svg)](../../actions/workflows/build.yml)
 [![Linux CI](https://github.com/MSelmanSonmez/DPIGate/actions/workflows/linux.yml/badge.svg)](../../actions/workflows/linux.yml)
 
@@ -53,6 +53,9 @@ same C engine (NFQUEUE + raw sockets instead of WinDivert), not a wrapper.
 2. Run the installer. Tick **Start automatically at logon** if you want it on every boot.
 3. Done — a tray icon appears near the clock. Right-click it to edit the
    whitelist, switch DNS, or stop.
+4. Restart any browser that was already open. Browsers keep their own DNS
+   cache, so a site you tried before DPIGate started can keep pointing at the
+   ISP's block page until the browser restarts.
 
 To remove it: tray icon → **Uninstall**, or **Settings → Apps & features**.
 

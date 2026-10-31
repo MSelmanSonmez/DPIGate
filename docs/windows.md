@@ -143,6 +143,11 @@ All original GoodbyeDPI arguments (`-p`, `-q`, `-r`, `-s`, `-e`, `-f`,
 ## Checking that it works
 
 1. With DPIGate **running**, open a previously blocked site in a whitelisted browser.
+   If it times out or resets but works in a freshly started app, the browser is
+   still using a block-page address it cached before DPIGate started. Restart
+   the browser, or in a Chromium browser open `chrome://net-internals/#dns`
+   (Helium: `helium://`), press **Clear host cache**, then **Flush socket pools**
+   on the `#sockets` page.
 2. Tray icon → **Exit**, then reload — it should be blocked again.
 3. Start it again from the Start Menu shortcut.
 
@@ -213,7 +218,7 @@ The Inno Setup script is `windows\setup.iss`:
 1. Install [Inno Setup 6.3+](https://jrsoftware.org/isinfo.php) — the script uses
    `ArchitecturesInstallIn64BitMode=x64compatible`, which older 6.x rejects.
 2. Run `iscc windows\setup.iss` from the repo root.
-3. Output: `windows\setup\DPIGate-1.0.0-setup.exe`.
+3. Output: `windows\setup\DPIGate-1.0.1-setup.exe`.
 
 The installer ships the prebuilt `x86\` and `x86_64\` binaries, the PowerShell
 scripts and `programs.txt` — which is kept on upgrade, since it is your editable
