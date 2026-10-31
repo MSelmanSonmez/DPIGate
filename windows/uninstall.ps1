@@ -110,9 +110,27 @@ try {
         }
     }
 } catch { }
+# This runs elevated inside a user-writable folder: if the folder (or a file
+# in it) is a junction/symlink, a recursive delete would follow it and wipe
+# whatever it points at with admin rights. Delete only our own files, never
+# through a reparse point, and drop the folder only when it is then empty.
+function Test-ReparsePoint([string]$Path) {
+    try {
+        $item = Get-Item -LiteralPath $Path -Force -ErrorAction Stop
+        return [bool]($item.Attributes -band [IO.FileAttributes]::ReparsePoint)
+    } catch { return $true }
+}
 foreach ($settingsDir in ($settingsDirs | Select-Object -Unique)) {
-    if (Test-Path -LiteralPath $settingsDir) {
-        Remove-Item -LiteralPath $settingsDir -Recurse -Force -ErrorAction SilentlyContinue
+    if (-not (Test-Path -LiteralPath $settingsDir)) { continue }
+    if (Test-ReparsePoint $settingsDir) { continue }
+    foreach ($fileName in @('settings', 'settings.tmp')) {
+        $file = Join-Path $settingsDir $fileName
+        if ((Test-Path -LiteralPath $file) -and -not (Test-ReparsePoint $file)) {
+            Remove-Item -LiteralPath $file -Force -ErrorAction SilentlyContinue
+        }
+    }
+    if (-not (Get-ChildItem -LiteralPath $settingsDir -Force -ErrorAction SilentlyContinue)) {
+        Remove-Item -LiteralPath $settingsDir -Force -ErrorAction SilentlyContinue
     }
 }
 
