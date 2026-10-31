@@ -664,7 +664,9 @@ public static class GdpiJobObject {
     $editItem = $menu.Items.Add('Edit Program Filters')
     $editItem.Add_Click({
         try {
-            Start-Process -FilePath $script:ProgramsList
+            # Not the .txt file association: it lives in user-writable HKCU
+            # and this tray runs elevated.
+            Start-Process -FilePath "$env:SystemRoot\System32\notepad.exe" -ArgumentList "`"$($script:ProgramsList)`""
         } catch {
             [System.Windows.Forms.MessageBox]::Show("Failed to open Program Filters:`r`n$_", 'DPIGate', 'OK', 'Warning')
         }
