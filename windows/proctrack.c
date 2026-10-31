@@ -62,6 +62,8 @@ static proc_record_t *proc_map = NULL;
 static wl_entry_t *whitelist = NULL;
 static size_t whitelist_count = 0;
 static size_t whitelist_cap = 0;
+/* Packet threads read the whitelist (shared); hot-reload swaps it (exclusive). */
+static SRWLOCK wl_lock = SRWLOCK_INIT;
 
 static HANDLE flow_handle = NULL;
 static HANDLE flow_thread = NULL;
@@ -274,19 +276,20 @@ static int match_exe(const char *path)
 {
     size_t i;
     const char *base = strrchr(path, '\\');
+    int hit = 0;
     if (base) base++; else base = path;
 
+    AcquireSRWLockShared(&wl_lock);
     for (i = 0; i < whitelist_count; i++) {
         wl_entry_t *e = &whitelist[i];
         if (e->is_path) {
-            if (strstr(path, e->pattern) != NULL)
-                return 1;
+            if (strstr(path, e->pattern) != NULL) { hit = 1; break; }
         } else {
-            if (strcmp(base, e->pattern) == 0)
-                return 1;
+            if (strcmp(base, e->pattern) == 0) { hit = 1; break; }
         }
     }
-    return 0;
+    ReleaseSRWLockShared(&wl_lock);
+    return hit;
 }
 
 static int match_pid(DWORD pid)
@@ -612,12 +615,16 @@ void proctrack_stop_flow_thread(void)
 
 /* Atomically replace the whitelist and re-seed the map.
  * Called from the watcher thread when programs.txt changes.
- * Thread-safe: builds new whitelist outside lock, swaps under lock. */
+ * Thread-safe: loads and swaps under the exclusive whitelist lock. */
 static int proctrack_reload(void)
 {
     wl_entry_t *old_wl;
     size_t old_count, old_cap;
     int n;
+
+    /* programs.txt is small; holding the lock across the read keeps
+     * packet threads off the half-built array. */
+    AcquireSRWLockExclusive(&wl_lock);
 
     /* Save old globals, point whitelist globals at fresh array. */
     old_wl = whitelist;
@@ -642,6 +649,7 @@ static int proctrack_reload(void)
         whitelist = old_wl;
         whitelist_count = old_count;
         whitelist_cap = old_cap;
+        ReleaseSRWLockExclusive(&wl_lock);
         return 0;
     }
 
@@ -652,6 +660,7 @@ static int proctrack_reload(void)
             free(old_wl[i].pattern);
         free(old_wl);
     }
+    ReleaseSRWLockExclusive(&wl_lock);
 
     /* Clear the 5-tuple map so all flows are re-evaluated against the
      * new whitelist (via FLOW thread for new flows, OS fallback for
