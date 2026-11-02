@@ -56,6 +56,13 @@ same C engine (NFQUEUE + raw sockets instead of WinDivert), not a wrapper.
 4. Restart any browser that was already open. Browsers keep their own DNS
    cache, so a site you tried before DPIGate started can keep pointing at the
    ISP's block page until the browser restarts.
+5. To avoid those restarts, turn on secure DNS, either for the whole system
+   (Windows 11: **Settings → Network & internet → your connection → DNS server
+   assignment → Edit → Manual**, then a DNS server such as `1.1.1.1` with
+   **DNS over HTTPS** on) or only in the browser (Chromium browsers:
+   **Settings → Privacy and security → Security → Use secure DNS**; Firefox:
+   **Settings → Privacy and security → DNS over HTTPS → Advanced settings →
+   Custom protection**).
 
 To remove it: tray icon → **Uninstall**, or **Settings → Apps & features**.
 

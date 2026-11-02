@@ -147,7 +147,9 @@ All original GoodbyeDPI arguments (`-p`, `-q`, `-r`, `-s`, `-e`, `-f`,
    still using a block-page address it cached before DPIGate started. Restart
    the browser, or in a Chromium browser open `chrome://net-internals/#dns`
    (Helium: `helium://`), press **Clear host cache**, then **Flush socket pools**
-   on the `#sockets` page.
+   on the `#sockets` page. To stop it from happening again, turn on secure DNS
+   (DNS over HTTPS) in Windows 11's DNS settings for your connection or in the
+   browser's own settings, so it no longer receives the block-page address.
 2. Tray icon → **Exit**, then reload — it should be blocked again.
 3. Start it again from the Start Menu shortcut.
 
