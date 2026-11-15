@@ -139,6 +139,15 @@ refuses to start rather than leave you debugging a bypass that cannot work;
 SOCKS5 proxy built on [ByeDPI](https://github.com/hufrea/byedpi); the packet-level tricks used on Windows and Linux (fake packets, TTL games) are not available on macOS.
 There is no installer yet. Build a universal binary with `make -C macos`; it lands in `macos/build/dpigate-proxy`.
 
+```sh
+make -C macos            # build macos/build/dpigate-proxy
+macos/dpigate run        # start the proxy, set system SOCKS proxy + DNS; Ctrl-C undoes both
+macos/dpigate restore    # put the saved settings back after a crash or kill -9
+macos/dpigate status     # proxy state and current proxy/DNS settings
+```
+
+`run` saves your previous proxy and DNS settings in `~/Library/Application Support/DPIGate/state` and restores them on exit. macOS may ask for an administrator password when settings change; the script never calls `sudo` itself.
+
 ## How it works
 
 DPIGate learns **which process owns each connection** and gates the
