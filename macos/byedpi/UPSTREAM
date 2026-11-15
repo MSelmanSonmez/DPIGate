@@ -1,0 +1,9 @@
+ByeDPI (https://github.com/hufrea/byedpi), MIT License
+Upstream commit: e268477
+
+Files taken unmodified:
+  conev.c conev.h desync.c desync.h error.h extend.c extend.h kavl.h main.c
+  mpool.c mpool.h packets.c packets.h params.h proxy.c proxy.h LICENSE
+
+Not taken: win_service.c/.h (Windows only), Dockerfile, upstream Makefile,
+README and prebuilt objects/binaries.
