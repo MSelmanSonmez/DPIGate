@@ -27,4 +27,7 @@ clean:
 	rm -f $(TARGET) $(foreach a,$(ARCHS),$(BUILD)/dpigate-proxy-$(a) $(patsubst %.c,$(BUILD)/$(a)/%.o,$(SRC)))
 	-rmdir $(foreach a,$(ARCHS),$(BUILD)/$(a)) $(BUILD) 2>/dev/null
 
-.PHONY: all clean
+test:
+	@/bin/bash tests/test_dpigate.sh
+
+.PHONY: all clean test

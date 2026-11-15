@@ -1,0 +1,301 @@
+#!/bin/bash
+# dpigate - run the DPIGate macOS SOCKS5 proxy and point the system at it.
+#
+# `run` starts the proxy, switches the active network service to the proxy
+# and to a clean DNS resolver, and puts the previous settings back on exit
+# (Ctrl-C, SIGTERM, SIGHUP, or the proxy dying). Previous settings are kept in
+# a state file, so `restore` can recover after the script itself was killed.
+#
+# Must work with macOS' bash 3.2: no associative arrays, no ${var,,}, no mapfile.
+
+set -u
+set -f   # never glob: bypass entries like *.local are passed around as words
+
+NETWORKSETUP=${NETWORKSETUP:-/usr/sbin/networksetup}
+ROUTE=${ROUTE:-/sbin/route}
+SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
+PROXY_BIN=${PROXY_BIN:-$SCRIPT_DIR/build/dpigate-proxy}
+STATE_DIR=${STATE_DIR:-$HOME/Library/Application Support/DPIGate}
+DPIGATE_PORT=${DPIGATE_PORT:-1080}
+DPIGATE_DNS=${DPIGATE_DNS:-1.1.1.1 1.0.0.1}
+DPIGATE_BYPASS=${DPIGATE_BYPASS:-localhost 127.0.0.1 *.local 169.254/16 192.168/16 10/8 172.16/12}
+STATE_FILE=$STATE_DIR/state
+
+PROXY_PID=
+STATE_WRITTEN=0
+CLEANED=0
+
+die() { echo "dpigate: $*" >&2; exit 1; }
+warn() { echo "dpigate: $*" >&2; }
+
+# Every networksetup call goes through here.
+ns() { "$NETWORKSETUP" "$@" </dev/null; }
+
+# Mutating networksetup call; explains permission failures.
+ns_set() {
+  local out rc
+  out=$(ns "$@" 2>&1); rc=$?
+  case "$out" in *"** Error"*) rc=1;; esac
+  if [ $rc -ne 0 ]; then
+    warn "networksetup $1 failed: $out"
+    warn "macOS may require an administrator account or password for this change."
+    warn "dpigate never calls sudo itself; run it from an admin account, or approve the system prompt."
+    return 1
+  fi
+  return 0
+}
+
+pid_alive() {
+  local s
+  s=$(ps -p "$1" -o stat= 2>/dev/null </dev/null) || return 1
+  s=${s// /}
+  case "$s" in ""|Z*) return 1;; esac
+  return 0
+}
+
+# stop_pid PID [COMM]: SIGINT, wait up to 2 s, then SIGKILL. If COMM is given the
+# process is only touched while its command name still matches (guards PID reuse).
+stop_pid() {
+  local pid=$1 comm=${2:-} cur i
+  [ -n "$pid" ] || return 0
+  pid_alive "$pid" || return 0
+  if [ -n "$comm" ]; then
+    cur=$(ps -p "$pid" -o comm= 2>/dev/null </dev/null)
+    [ "$cur" = "$comm" ] || return 0
+  fi
+  kill -INT "$pid" 2>/dev/null
+  i=0
+  while [ $i -lt 20 ] && pid_alive "$pid"; do sleep 0.1; i=$((i + 1)); done
+  if pid_alive "$pid"; then
+    kill -KILL "$pid" 2>/dev/null
+    sleep 0.1
+  fi
+  return 0
+}
+
+# Active network service: default route -> interface -> service name.
+default_service() {
+  local iface svc
+  iface=$("$ROUTE" -n get default </dev/null 2>/dev/null | awk '$1=="interface:"{print $2; exit}')
+  [ -n "$iface" ] || { warn "no default route found (not connected to a network?)"; return 1; }
+  svc=$(ns -listnetworkserviceorder 2>/dev/null | awk -v dev="$iface" '
+    /^\([0-9*]+\) /      { n = $0; sub(/^\([0-9*]+\) /, "", n); next }
+    /Device: /           { d = $0; sub(/.*Device: /, "", d); sub(/\).*/, "", d)
+                           if (d == dev) { print n; exit } }')
+  [ -n "$svc" ] || { warn "no network service found for interface $iface"; return 1; }
+  printf '%s\n' "$svc"
+}
+
+# Read the current settings of service $1 into CUR_* variables.
+read_current() {
+  local svc=$1 out
+  out=$(ns -getsocksfirewallproxy "$svc") || { warn "cannot read proxy settings of $svc"; return 1; }
+  CUR_SOCKS_ENABLED=$(printf '%s\n' "$out" | awk '$1=="Enabled:"{print ($2=="Yes") ? "yes" : "no"; exit}')
+  CUR_SOCKS_SERVER=$(printf '%s\n' "$out" | awk '$1=="Server:"{print $2; exit}')
+  CUR_SOCKS_PORT=$(printf '%s\n' "$out" | awk '$1=="Port:"{print $2; exit}')
+  out=$(ns -getproxybypassdomains "$svc") || { warn "cannot read bypass domains of $svc"; return 1; }
+  case "$out" in
+    "There aren't any"*|"") CUR_BYPASS=Empty;;
+    *) CUR_BYPASS=$(printf '%s\n' "$out" | tr '\n' ' ' | sed 's/ *$//');;
+  esac
+  out=$(ns -getdnsservers "$svc") || { warn "cannot read DNS servers of $svc"; return 1; }
+  case "$out" in
+    "There aren't any"*|"") CUR_DNS=Empty;;
+    *) CUR_DNS=$(printf '%s\n' "$out" | tr '\n' ' ' | sed 's/ *$//');;
+  esac
+  [ -n "$CUR_SOCKS_PORT" ] || CUR_SOCKS_PORT=0
+  return 0
+}
+
+write_state() {
+  mkdir -p "$STATE_DIR" && chmod 700 "$STATE_DIR" || return 1
+  {
+    printf 'version=1\n'
+    printf 'service=%s\n' "$1"
+    printf 'script_pid=%s\n' "$$"
+    printf 'proxy_pid=%s\n' "$PROXY_PID"
+    printf 'proxy_comm=%s\n' "$2"
+    printf 'socks_enabled=%s\n' "$CUR_SOCKS_ENABLED"
+    printf 'socks_server=%s\n' "$CUR_SOCKS_SERVER"
+    printf 'socks_port=%s\n' "$CUR_SOCKS_PORT"
+    printf 'bypass=%s\n' "$CUR_BYPASS"
+    printf 'dns=%s\n' "$CUR_DNS"
+  } > "$STATE_FILE.tmp" && mv "$STATE_FILE.tmp" "$STATE_FILE"
+}
+
+# Load the state file into S_* variables (no eval; plain key=value lines).
+load_state() {
+  local line key val
+  S_SERVICE= S_SCRIPT_PID= S_PROXY_PID= S_PROXY_COMM=
+  S_SOCKS_ENABLED=no S_SOCKS_SERVER= S_SOCKS_PORT=0 S_BYPASS=Empty S_DNS=Empty
+  while IFS= read -r line || [ -n "$line" ]; do
+    key=${line%%=*}; val=${line#*=}
+    case "$key" in
+      service) S_SERVICE=$val;;
+      script_pid) S_SCRIPT_PID=$val;;
+      proxy_pid) S_PROXY_PID=$val;;
+      proxy_comm) S_PROXY_COMM=$val;;
+      socks_enabled) S_SOCKS_ENABLED=$val;;
+      socks_server) S_SOCKS_SERVER=$val;;
+      socks_port) S_SOCKS_PORT=$val;;
+      bypass) S_BYPASS=$val;;
+      dns) S_DNS=$val;;
+    esac
+  done < "$STATE_FILE"
+  [ -n "$S_SERVICE" ] || { warn "state file $STATE_FILE has no service; remove it by hand"; return 1; }
+  return 0
+}
+
+# Put the saved settings back, stop the saved proxy, delete the state file.
+# The state file is kept when anything fails so `restore` can be retried.
+restore_state() {
+  [ -f "$STATE_FILE" ] || return 0
+  load_state || return 1
+  local rc=0
+  if [ -n "$S_SOCKS_SERVER" ] && [ "$S_SOCKS_PORT" != 0 ]; then
+    ns_set -setsocksfirewallproxy "$S_SERVICE" "$S_SOCKS_SERVER" "$S_SOCKS_PORT" || rc=1
+  fi
+  if [ "$S_SOCKS_ENABLED" = yes ]; then
+    ns_set -setsocksfirewallproxystate "$S_SERVICE" on || rc=1
+  else
+    ns_set -setsocksfirewallproxystate "$S_SERVICE" off || rc=1
+  fi
+  # $S_BYPASS / $S_DNS are intentionally unquoted: space separated lists (globbing is off).
+  ns_set -setproxybypassdomains "$S_SERVICE" $S_BYPASS || rc=1
+  ns_set -setdnsservers "$S_SERVICE" $S_DNS || rc=1
+  if [ $rc -ne 0 ]; then
+    warn "could not restore all settings of '$S_SERVICE'. State kept in $STATE_FILE; run 'dpigate restore' to retry."
+    return 1
+  fi
+  stop_pid "$S_PROXY_PID" "$S_PROXY_COMM"
+  rm -f "$STATE_FILE" "$STATE_FILE.tmp"
+  return 0
+}
+
+cleanup() {
+  [ "$CLEANED" = 1 ] && return
+  CLEANED=1
+  trap '' INT TERM HUP
+  if [ "$STATE_WRITTEN" = 1 ]; then
+    echo "dpigate: restoring previous network settings..."
+    restore_state
+  fi
+  [ -n "$PROXY_PID" ] && stop_pid "$PROXY_PID"
+}
+
+wait_for_listener() {
+  local i=0
+  while [ $i -lt 30 ]; do
+    pid_alive "$PROXY_PID" || return 1
+    if lsof -nP -iTCP:"$DPIGATE_PORT" -sTCP:LISTEN -t </dev/null 2>/dev/null | grep -qx "$PROXY_PID"; then
+      return 0
+    fi
+    sleep 0.1
+    i=$((i + 1))
+  done
+  return 1
+}
+
+cmd_run() {
+  [ "${1:-}" = "--" ] && shift
+  [ -x "$PROXY_BIN" ] || die "proxy binary not found: $PROXY_BIN (build it with: make -C macos)"
+  local svc comm
+  svc=$(default_service) || exit 1
+
+  if [ -f "$STATE_FILE" ]; then
+    load_state || exit 1
+    if [ -n "$S_SCRIPT_PID" ] && pid_alive "$S_SCRIPT_PID"; then
+      die "another dpigate run seems active (pid $S_SCRIPT_PID); stop it first"
+    fi
+    echo "dpigate: previous run did not exit cleanly; restoring its settings first"
+    restore_state || die "could not restore previous settings; fix the error above, then run 'dpigate restore'"
+  fi
+
+  read_current "$svc" || exit 1
+
+  # Job control gives the proxy its own process group with default signal
+  # handling (background jobs of a non-interactive shell would ignore SIGINT).
+  set -m
+  "$PROXY_BIN" -i 127.0.0.1 -p "$DPIGATE_PORT" --tlsrec 1+s "$@" </dev/null &
+  PROXY_PID=$!
+  trap cleanup EXIT
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
+  trap 'exit 129' HUP
+
+  if ! wait_for_listener; then
+    die "proxy did not start listening on 127.0.0.1:$DPIGATE_PORT; system settings were not changed"
+  fi
+  comm=$(ps -p "$PROXY_PID" -o comm= 2>/dev/null </dev/null)
+
+  write_state "$svc" "$comm" || die "cannot write state file $STATE_FILE"
+  STATE_WRITTEN=1
+
+  ns_set -setsocksfirewallproxy "$svc" 127.0.0.1 "$DPIGATE_PORT" \
+    && ns_set -setsocksfirewallproxystate "$svc" on \
+    && ns_set -setproxybypassdomains "$svc" $DPIGATE_BYPASS \
+    && ns_set -setdnsservers "$svc" $DPIGATE_DNS \
+    || die "could not apply settings; restoring the previous ones"
+
+  echo "dpigate: running on '$svc' (SOCKS5 127.0.0.1:$DPIGATE_PORT, DNS $DPIGATE_DNS). Press Ctrl-C to stop."
+  while pid_alive "$PROXY_PID"; do
+    wait "$PROXY_PID"
+  done
+  warn "proxy exited unexpectedly"
+  exit 1
+}
+
+cmd_restore() {
+  if [ ! -f "$STATE_FILE" ]; then
+    echo "dpigate: nothing to restore"
+    return 0
+  fi
+  load_state || return 1
+  if [ -n "$S_SCRIPT_PID" ] && pid_alive "$S_SCRIPT_PID"; then
+    die "a dpigate run is still active (pid $S_SCRIPT_PID); stop it with Ctrl-C instead"
+  fi
+  restore_state || return 1
+  echo "dpigate: previous settings restored"
+}
+
+cmd_status() {
+  local svc
+  if [ -f "$STATE_FILE" ] && load_state; then
+    if pid_alive "$S_PROXY_PID"; then
+      echo "proxy:   running (pid $S_PROXY_PID, started by dpigate pid $S_SCRIPT_PID)"
+    else
+      echo "proxy:   not running, but a state file exists: run 'dpigate restore'"
+    fi
+  else
+    echo "proxy:   not running (no state file)"
+  fi
+  if svc=$(default_service 2>/dev/null); then
+    echo "service: $svc"
+    echo "socks:   $(ns -getsocksfirewallproxy "$svc" 2>&1 | awk '$1=="Enabled:"{e=$2} $1=="Server:"{s=$2} $1=="Port:"{p=$2} END{print "enabled=" e " server=" s " port=" p}')"
+    echo "dns:     $(ns -getdnsservers "$svc" 2>&1 | tr '\n' ' ' | sed 's/ *$//')"
+  else
+    echo "service: unknown (no default route)"
+  fi
+}
+
+cmd_help() {
+  cat <<'EOF'
+Usage: dpigate <command>
+
+  run [-- <proxy args>]   start the proxy, set system SOCKS proxy and DNS (1.1.1.1, 1.0.0.1);
+                          Ctrl-C stops it and restores the previous settings
+  restore                 restore the saved settings after a crash or kill -9
+  status                  show whether the proxy runs and the current proxy/DNS settings
+  help                    show this text
+
+Environment: NETWORKSETUP, ROUTE, PROXY_BIN, STATE_DIR, DPIGATE_PORT (default 1080).
+EOF
+}
+
+case "${1:-help}" in
+  run) shift; cmd_run "$@";;
+  restore) cmd_restore;;
+  status) cmd_status;;
+  help|-h|--help) cmd_help;;
+  *) cmd_help >&2; exit 2;;
+esac
