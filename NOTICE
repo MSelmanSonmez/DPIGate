@@ -75,3 +75,10 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
+
+The macOS port (macos/) bundles ByeDPI by hufrea
+(https://github.com/hufrea/byedpi), licensed under the MIT License
+(Copyright (c) 2024 hufrea; full text in macos/byedpi/LICENSE). The sources in
+macos/byedpi/ are unmodified upstream files (commit e268477, see
+macos/byedpi/UPSTREAM). macos/Makefile builds them into a universal SOCKS5
+proxy binary.

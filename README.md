@@ -134,6 +134,11 @@ refuses to start rather than leave you debugging a bypass that cannot work;
 
 ---
 
+## macOS (experimental)
+
+SOCKS5 proxy built on [ByeDPI](https://github.com/hufrea/byedpi); the packet-level tricks used on Windows and Linux (fake packets, TTL games) are not available on macOS.
+There is no installer yet. Build a universal binary with `make -C macos`; it lands in `macos/build/dpigate-proxy`.
+
 ## How it works
 
 DPIGate learns **which process owns each connection** and gates the
