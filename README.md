@@ -141,12 +141,12 @@ There is no installer yet. Build a universal binary with `make -C macos`; it lan
 
 ```sh
 make -C macos            # build macos/build/dpigate-proxy
-macos/dpigate run        # start the proxy, set system SOCKS proxy + DNS; Ctrl-C undoes both
+macos/dpigate run        # set DNS, flush the DNS cache, start the proxy, set system SOCKS; Ctrl-C undoes it
 macos/dpigate restore    # put the saved settings back after a crash or kill -9
 macos/dpigate status     # proxy state and current proxy/DNS settings
 ```
 
-`run` saves your previous proxy and DNS settings in `~/Library/Application Support/DPIGate/state` and restores them on exit. macOS may ask for an administrator password when settings change; the script never calls `sudo` itself.
+`run` saves your previous proxy and DNS settings in `~/Library/Application Support/DPIGate/state` and restores them on exit. macOS may ask for an administrator password when settings change; the script never calls `sudo` itself. Flushing the DNS cache needs root, so on start macOS shows its own password dialog once; if you cancel it, `run` continues but the first page loads may be slow.
 
 ## How it works
 

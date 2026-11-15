@@ -1,10 +1,12 @@
 #!/bin/bash
 # dpigate - run the DPIGate macOS SOCKS5 proxy and point the system at it.
 #
-# `run` starts the proxy, switches the active network service to the proxy
-# and to a clean DNS resolver, and puts the previous settings back on exit
-# (Ctrl-C, SIGTERM, SIGHUP, or the proxy dying). Previous settings are kept in
-# a state file, so `restore` can recover after the script itself was killed.
+# `run` switches the active network service to a clean DNS resolver, flushes
+# the macOS DNS cache (so poisoned answers from the old resolver are gone),
+# starts the proxy, and only then points the system SOCKS setting at it. The
+# previous settings are put back on exit (Ctrl-C, SIGTERM, SIGHUP, or the
+# proxy dying). They are kept in a state file, so `restore` can recover after
+# the script itself was killed.
 #
 # Must work with macOS' bash 3.2: no associative arrays, no ${var,,}, no mapfile.
 
@@ -18,11 +20,17 @@ PROXY_BIN=${PROXY_BIN:-$SCRIPT_DIR/build/dpigate-proxy}
 STATE_DIR=${STATE_DIR:-$HOME/Library/Application Support/DPIGate}
 DPIGATE_PORT=${DPIGATE_PORT:-1080}
 DPIGATE_DNS=${DPIGATE_DNS:-1.1.1.1 1.0.0.1}
+DSCACHEUTIL=${DSCACHEUTIL:-/usr/bin/dscacheutil}
+OSASCRIPT=${OSASCRIPT:-/usr/bin/osascript}
+RESOLVE_CMD=${RESOLVE_CMD:-/usr/bin/dscacheutil -q host -a name}   # word-split; the name is appended
+DPIGATE_PROBE=${DPIGATE_PROBE:-discord.com}
+DPIGATE_WARMUP_SECS=${DPIGATE_WARMUP_SECS:-5}
 DPIGATE_BYPASS=${DPIGATE_BYPASS:-localhost 127.0.0.1 *.local 169.254/16 192.168/16 10/8 172.16/12}
 STATE_FILE=$STATE_DIR/state
 
 PROXY_PID=
 STATE_WRITTEN=0
+SOCKS_APPLIED=0
 CLEANED=0
 
 die() { echo "dpigate: $*" >&2; exit 1; }
@@ -115,6 +123,7 @@ write_state() {
     printf 'script_pid=%s\n' "$$"
     printf 'proxy_pid=%s\n' "$PROXY_PID"
     printf 'proxy_comm=%s\n' "$2"
+    printf 'socks_applied=%s\n' "$SOCKS_APPLIED"
     printf 'socks_enabled=%s\n' "$CUR_SOCKS_ENABLED"
     printf 'socks_server=%s\n' "$CUR_SOCKS_SERVER"
     printf 'socks_port=%s\n' "$CUR_SOCKS_PORT"
@@ -127,7 +136,7 @@ write_state() {
 load_state() {
   local line key val
   S_SERVICE= S_SCRIPT_PID= S_PROXY_PID= S_PROXY_COMM=
-  S_SOCKS_ENABLED=no S_SOCKS_SERVER= S_SOCKS_PORT=0 S_BYPASS=Empty S_DNS=Empty
+  S_SOCKS_APPLIED=1 S_SOCKS_ENABLED=no S_SOCKS_SERVER= S_SOCKS_PORT=0 S_BYPASS=Empty S_DNS=Empty
   while IFS= read -r line || [ -n "$line" ]; do
     key=${line%%=*}; val=${line#*=}
     case "$key" in
@@ -135,6 +144,7 @@ load_state() {
       script_pid) S_SCRIPT_PID=$val;;
       proxy_pid) S_PROXY_PID=$val;;
       proxy_comm) S_PROXY_COMM=$val;;
+      socks_applied) S_SOCKS_APPLIED=$val;;
       socks_enabled) S_SOCKS_ENABLED=$val;;
       socks_server) S_SOCKS_SERVER=$val;;
       socks_port) S_SOCKS_PORT=$val;;
@@ -152,23 +162,62 @@ restore_state() {
   [ -f "$STATE_FILE" ] || return 0
   load_state || return 1
   local rc=0
-  if [ -n "$S_SOCKS_SERVER" ] && [ "$S_SOCKS_PORT" != 0 ]; then
-    ns_set -setsocksfirewallproxy "$S_SERVICE" "$S_SOCKS_SERVER" "$S_SOCKS_PORT" || rc=1
+  # SOCKS and bypass list are only touched if run got as far as applying them.
+  if [ "$S_SOCKS_APPLIED" = 1 ]; then
+    if [ -n "$S_SOCKS_SERVER" ] && [ "$S_SOCKS_PORT" != 0 ]; then
+      ns_set -setsocksfirewallproxy "$S_SERVICE" "$S_SOCKS_SERVER" "$S_SOCKS_PORT" || rc=1
+    else
+      # Previously no server at all: clear ours. Best effort, real networksetup may refuse
+      # an empty server (LOW: then 127.0.0.1:1080 stays configured, but disabled).
+      ns -setsocksfirewallproxy "$S_SERVICE" "" 0 >/dev/null 2>&1
+    fi
+    if [ "$S_SOCKS_ENABLED" = yes ]; then
+      ns_set -setsocksfirewallproxystate "$S_SERVICE" on || rc=1
+    else
+      ns_set -setsocksfirewallproxystate "$S_SERVICE" off || rc=1
+    fi
+    # $S_BYPASS / $S_DNS are intentionally unquoted: space separated lists (globbing is off).
+    ns_set -setproxybypassdomains "$S_SERVICE" $S_BYPASS || rc=1
   fi
-  if [ "$S_SOCKS_ENABLED" = yes ]; then
-    ns_set -setsocksfirewallproxystate "$S_SERVICE" on || rc=1
-  else
-    ns_set -setsocksfirewallproxystate "$S_SERVICE" off || rc=1
-  fi
-  # $S_BYPASS / $S_DNS are intentionally unquoted: space separated lists (globbing is off).
-  ns_set -setproxybypassdomains "$S_SERVICE" $S_BYPASS || rc=1
   ns_set -setdnsservers "$S_SERVICE" $S_DNS || rc=1
   if [ $rc -ne 0 ]; then
     warn "could not restore all settings of '$S_SERVICE'. State kept in $STATE_FILE; run 'dpigate restore' to retry."
     return 1
   fi
+  flush_dns nohup
   stop_pid "$S_PROXY_PID" "$S_PROXY_COMM"
   rm -f "$STATE_FILE" "$STATE_FILE.tmp"
+  return 0
+}
+
+# flush_dns [hup]: flush the resolver cache. With "hup" also HUP mDNSResponder, which needs
+# root: macOS' own password dialog (osascript) is used, never sudo.
+flush_dns() {
+  "$DSCACHEUTIL" -flushcache </dev/null >/dev/null 2>&1 || warn "dscacheutil -flushcache failed"
+  [ "${1:-}" = hup ] || return 0
+  echo "dpigate: macOS will ask for your password to flush the DNS cache."
+  if ! "$OSASCRIPT" -e 'do shell script "killall -HUP mDNSResponder" with administrator privileges' </dev/null >/dev/null 2>&1; then
+    warn "DNS cache not flushed; first loads may be slow"
+  fi
+}
+
+resolve_ip() {
+  # shellcheck disable=SC2086
+  $RESOLVE_CMD "$DPIGATE_PROBE" </dev/null 2>/dev/null | awk '/^ip_address:/{print $2; exit}'
+}
+
+# warm_up OLD_IP: wait until the system resolver gives a fresh answer for the probe name.
+warm_up() {
+  local old=$1 ip i=0 max
+  max=$(awk -v s="$DPIGATE_WARMUP_SECS" 'BEGIN{printf "%d", s * 4}')
+  while :; do
+    ip=$(resolve_ip)
+    if [ -n "$ip" ] && [ "$ip" != "$old" ]; then return 0; fi
+    [ $i -ge "$max" ] && break
+    sleep 0.25
+    i=$((i + 1))
+  done
+  warn "resolver still answers '$DPIGATE_PROBE' like before after ${DPIGATE_WARMUP_SECS}s; continuing, first loads may be slow"
   return 0
 }
 
@@ -212,29 +261,39 @@ cmd_run() {
   fi
 
   read_current "$svc" || exit 1
+  local old_ip
+  old_ip=$(resolve_ip)
+
+  # Settings are saved before the first change; the cleanup trap restores them on any exit.
+  write_state "$svc" "" || die "cannot write state file $STATE_FILE"
+  STATE_WRITTEN=1
+  trap cleanup EXIT
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
+  trap 'exit 129' HUP
+
+  # DNS first, then a cache flush, so the proxy never resolves through stale answers.
+  ns_set -setdnsservers "$svc" $DPIGATE_DNS || die "could not set DNS; restoring the previous settings"
+  flush_dns hup
+  warm_up "$old_ip"
 
   # Job control gives the proxy its own process group with default signal
   # handling (background jobs of a non-interactive shell would ignore SIGINT).
   set -m
   "$PROXY_BIN" -i 127.0.0.1 -p "$DPIGATE_PORT" --tlsrec 1+s "$@" </dev/null &
   PROXY_PID=$!
-  trap cleanup EXIT
-  trap 'exit 130' INT
-  trap 'exit 143' TERM
-  trap 'exit 129' HUP
+  write_state "$svc" "" || die "cannot write state file $STATE_FILE"
 
   if ! wait_for_listener; then
-    die "proxy did not start listening on 127.0.0.1:$DPIGATE_PORT; system settings were not changed"
+    die "proxy did not start listening on 127.0.0.1:$DPIGATE_PORT; restoring the previous settings"
   fi
   comm=$(ps -p "$PROXY_PID" -o comm= 2>/dev/null </dev/null)
-
+  SOCKS_APPLIED=1
   write_state "$svc" "$comm" || die "cannot write state file $STATE_FILE"
-  STATE_WRITTEN=1
 
   ns_set -setsocksfirewallproxy "$svc" 127.0.0.1 "$DPIGATE_PORT" \
     && ns_set -setsocksfirewallproxystate "$svc" on \
     && ns_set -setproxybypassdomains "$svc" $DPIGATE_BYPASS \
-    && ns_set -setdnsservers "$svc" $DPIGATE_DNS \
     || die "could not apply settings; restoring the previous ones"
 
   echo "dpigate: running on '$svc' (SOCKS5 127.0.0.1:$DPIGATE_PORT, DNS $DPIGATE_DNS). Press Ctrl-C to stop."
@@ -282,13 +341,15 @@ cmd_help() {
   cat <<'EOF'
 Usage: dpigate <command>
 
-  run [-- <proxy args>]   start the proxy, set system SOCKS proxy and DNS (1.1.1.1, 1.0.0.1);
+  run [-- <proxy args>]   set DNS (1.1.1.1, 1.0.0.1), flush the DNS cache (macOS asks for your
+                          password once), start the proxy, then set the system SOCKS proxy;
                           Ctrl-C stops it and restores the previous settings
   restore                 restore the saved settings after a crash or kill -9
   status                  show whether the proxy runs and the current proxy/DNS settings
   help                    show this text
 
-Environment: NETWORKSETUP, ROUTE, PROXY_BIN, STATE_DIR, DPIGATE_PORT (default 1080).
+Environment: NETWORKSETUP, ROUTE, PROXY_BIN, STATE_DIR, DPIGATE_PORT (default 1080),
+DSCACHEUTIL, OSASCRIPT, RESOLVE_CMD, DPIGATE_PROBE (default discord.com), DPIGATE_WARMUP_SECS (default 5).
 EOF
 }
 
