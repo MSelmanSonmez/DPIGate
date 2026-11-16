@@ -11,7 +11,10 @@ permissions:
   contents: read
 
 env:
-  APPIMAGETOOL_URL: https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
+  # Full download URL of a pinned, versioned appimagetool release asset
+  # (not the "continuous" tag). Left empty on purpose: the job fails closed
+  # until a release is chosen and its sha256 is pinned below.
+  APPIMAGETOOL_URL: ""
   APPIMAGETOOL_SHA256: ""
 
 jobs:
@@ -20,6 +23,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Install build dependencies
         run: |
@@ -37,6 +42,7 @@ jobs:
 
       - name: Fetch appimagetool (verified)
         run: |
+          test -n "$APPIMAGETOOL_URL" || { echo "::error::APPIMAGETOOL_URL is not set to a pinned release"; exit 1; }
           test -n "$APPIMAGETOOL_SHA256" || { echo "::error::APPIMAGETOOL_SHA256 is not pinned yet"; exit 1; }
           wget -q -O "$RUNNER_TEMP/appimagetool" "$APPIMAGETOOL_URL"
           echo "$APPIMAGETOOL_SHA256  $RUNNER_TEMP/appimagetool" | sha256sum -c -
