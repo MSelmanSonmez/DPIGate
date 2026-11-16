@@ -204,6 +204,16 @@ check "uninstall: script got SIGINT and restored" 'has_line "$D/calls" "signal I
 check "uninstall: LaunchAgent removed" '[ ! -e "$D/LA/org.dpigate.menubar.plist" ]'
 check "uninstall: config, state and log folders removed" '[ ! -e "$D/AppSupport/DPIGate" ] && [ ! -e "$D/Logs/DPIGate" ]'
 
+# (d2) Uninstall when restore fails: nothing is deleted, the user is told
+U=$ROOT/u; mkdir -p "$U/LA" "$U/AppSupport/DPIGate/config"; fake_launchctl "$U"; make_fake "$U"
+sed -i '' 's/restore) exit 0;;/restore) exit 1;;/' "$U/fake"
+echo placeholder > "$U/LA/org.dpigate.menubar.plist"; echo "service=X" > "$U/AppSupport/DPIGate/state"; echo "site_mode=0" > "$U/AppSupport/DPIGate/config/config"
+app_env "$U" DPIGATE_APP_SCRIPT="$U/fake" DPIGATE_APP_ACTION=uninstall
+wait_for 20 has_line "$U/notify" "Uninstall stopped"
+check "failed restore: user is told, nothing deleted" 'has_line "$U/notify" "nothing was deleted" && [ -f "$U/AppSupport/DPIGate/state" ] && [ -f "$U/AppSupport/DPIGate/config/config" ] && [ -f "$U/LA/org.dpigate.menubar.plist" ]'
+check "failed restore: app keeps running" 'kill -0 "$APP_PID" 2>/dev/null'
+kill -TERM "$APP_PID" 2>/dev/null; wait_for 12 gone "$APP_PID"; APP_PID=
+
 # (f) Only Listed Sites: the proxy gets ByeDPI's host list (-H) plus an empty second group (-An)
 stop_app() { kill -TERM "$APP_PID" 2>/dev/null; wait_for 12 gone "$APP_PID"; APP_PID=; }
 DEFS=":discord.com discord.gg discordapp.com discordapp.net discord.media discordcdn.com"

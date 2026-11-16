@@ -552,7 +552,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         log("app: uninstalling")
         shutdownBlocking()
-        if FileManager.default.fileExists(atPath: stateFile) { runBlocking(["restore"]) }
+        // If the saved settings cannot be put back, keep everything: the state file is the only way to restore them later.
+        if FileManager.default.fileExists(atPath: stateFile), runBlocking(["restore"]) != 0 {
+            log("app: uninstall stopped, restore failed")
+            notify("Uninstall stopped: your network settings could not be restored and nothing was deleted. Try again, or run: dpigate restore")
+            return
+        }
         setAutostart(false)
         // apps.txt: older versions created it; clean it up too.
         wipe(configDir, default: defaultStateDir + "/config", files: ["config", "apps.txt", "sites.txt"])
@@ -716,13 +721,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         log("app: shutdown complete")
     }
 
-    func runBlocking(_ args: [String]) {
+    @discardableResult
+    func runBlocking(_ args: [String]) -> Int32 {
         let p = Process()
         p.executableURL = URL(fileURLWithPath: "/bin/bash")
         p.arguments = [scriptPath] + args
         if let h = logHandle { p.standardOutput = h; p.standardError = h }
         p.standardInput = FileHandle.nullDevice
-        do { try p.run(); p.waitUntilExit() } catch { log("app: \(args) failed: \(error)") }
+        do { try p.run(); p.waitUntilExit() } catch { log("app: \(args) failed: \(error)"); return -1 }
+        return p.terminationStatus
     }
 
     // MARK: notifications
