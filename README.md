@@ -78,7 +78,8 @@ To remove it: tray icon → **Uninstall**, or **Settings → Apps & features**.
 ### Linux
 
 There is no prebuilt package — the binary is compiled on your machine, so start
-by getting the sources:
+by getting the sources (an AppImage can also be built from them with
+`linux/packaging/appimage/build-appimage.sh`; see the [Linux guide](docs/linux.md#appimage)):
 
 ```bash
 git clone https://github.com/MSelmanSonmez/DPIGate.git

@@ -135,6 +135,82 @@ A successful run ends with `[install] --check-only: distro detection, package
 resolution, and build all OK.` Remaining `missing:` lines are real problems;
 `warn:` lines are optional things such as tray or notification support.
 
+### AppImage
+
+`linux/packaging/appimage/build-appimage.sh` builds a single-file x86_64 bundle,
+`dpigate-<version>-x86_64.AppImage`. It contains the `linux/` tree, the daemon and
+the three C libraries it links against (`libnetfilter_queue`, `libnfnetlink`,
+`libmnl`). It does **not** contain `nftables`, `iptables`, `libcap`, or the
+Python/GTK stack for the tray; those are still required on the host (see
+[Requirements](#requirements)).
+
+**Running it.** Make the file executable and start it:
+
+```bash
+chmod +x dpigate-<version>-x86_64.AppImage
+./dpigate-<version>-x86_64.AppImage
+```
+
+The first launch copies the payload out of the read-only AppImage to
+`~/.local/share/DPIGate/<version>/`, runs that copy's `install.sh --no-build`
+(it asks for root through `sudo`, `doas`, `pkexec` or `run0` when it needs it),
+copies the bundled libraries to `~/.local/share/DPIGate/lib/`, and starts the
+tray. Later launches of the same version only start the tray. A newer AppImage
+copies and installs its own version; the older `<version>/` folders are not
+removed automatically.
+
+AppImages need FUSE to mount. If it is not available, run
+`./dpigate-<version>-x86_64.AppImage --appimage-extract-and-run`, or install
+`libfuse2`.
+
+`AppRun` flags (the AppImage never runs as root; it refuses to):
+
+| Flag | What it does |
+|---|---|
+| `--install` | Copy the payload again and run install.sh again, even if this version is installed |
+| `--uninstall` | Run the installed `uninstall.sh` (removes the firewall rules, service, files and config) |
+| `--no-tray` | Do not start the tray after the install step |
+| `--dry-run` | Testing only: copy the payload, print the install and tray steps, run neither |
+| `--help` | Show the usage text |
+
+Any other flag is passed to `install.sh`, and passing one implies an install step.
+The `install.sh` flags above work here as well:
+
+| Flag | What it does |
+|---|---|
+| `--system` | Install a root/system service (systemd system unit, OpenRC or runit) |
+| `--start` | Start the bypass when the install finishes |
+| `--autostart` | Add the login autostart entry |
+| `--no-autostart` | Remove an existing login autostart entry |
+| `--no-shortcut` | Skip the application-menu entry |
+| `--assume-deps` | Skip dependency probing/auto-install |
+| `--gui` / `--cli` | Force the graphical wizard / the text installer |
+| `--check-only` | Probe the system only; the tray is not started |
+
+`--no-build` is implied, because the AppImage ships a prebuilt binary.
+
+To remove DPIGate, run `./dpigate-<version>-x86_64.AppImage --uninstall` or
+`~/.local/share/DPIGate/uninstall.sh`.
+
+**Building the AppImage.** Needs `cc`, `make`, `pkg-config`, the development
+packages listed in [Requirements](#requirements), and
+[appimagetool](https://github.com/AppImage/appimagetool):
+
+```bash
+APPIMAGETOOL=/path/to/appimagetool linux/packaging/appimage/build-appimage.sh [OUTPUT_DIR]
+```
+
+The output defaults to `dist/` at the repository root. Without `appimagetool`
+the script stops with exit code 3 and keeps the staged AppDir. The version is
+read from `DPIGATE_VERSION` in `linux/goodbyedpi.c`. The binary is linked with
+`RUNPATH $ORIGIN/lib`, which is what lets the daemon find the bundled libraries
+even though `setcap` makes it ignore `LD_LIBRARY_PATH`.
+
+The bundled libraries come from the build host, so build on the oldest
+distribution you intend to support. The GitHub workflow
+`.github/workflows/appimage.yml` does this on demand (manual trigger) and uploads
+the AppImage as a run artifact; it does not create a release.
+
 ### Graphical install wizard
 
 Double-clicking `install.sh` in a file manager — or running it with no terminal
