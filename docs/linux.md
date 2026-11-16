@@ -200,6 +200,10 @@ done: no `~/.local/share/DPIGate`, no systemd unit, no autostart entry, no menu 
   start DPIGate. The tray has no Auto Start and no Uninstall entry in this mode.
 - Only one DPIGate tray (installed or not) runs at a time. Starting a second one says
   "already running" and does nothing.
+- If another engine is already running (the system service `goodbyedpi.service`, or a
+  `goodbyedpi` that an installed DPIGate started), running without installing does **not**
+  start: it would stop that engine and then remove its rules when the tray exits. AppRun
+  says so and exits with status 3; stop the other one first.
 - The tray is required: an engine nobody can stop must not run. If the tray packages
   are missing and cannot be installed, the engine is not started.
 
@@ -255,7 +259,7 @@ AppImages need FUSE to mount. If it is not available, run
 | Flag | What it does |
 |---|---|
 | `--install` | Install: copy the payload again and run install.sh again, even if this version is installed |
-| `--portable` | Run without installing (cannot be combined with `--install`, install flags or `--no-tray`) |
+| `--portable` | Run without installing (cannot be combined with `--install`, install flags other than `--assume-deps`, or `--no-tray`) |
 | `--uninstall` | Run the installed `uninstall.sh` (removes the firewall rules, service, files and config) |
 | `--no-tray` | Do not start the tray after the install step (install path only) |
 | `--dry-run` | Testing only: print the steps. Install path: copies the payload but runs neither install.sh nor the tray. With `--portable`: creates nothing |
@@ -271,7 +275,7 @@ The `install.sh` flags above work here as well (install path only):
 | `--autostart` | Add the login autostart entry |
 | `--no-autostart` | Remove an existing login autostart entry |
 | `--no-shortcut` | Skip the application-menu entry |
-| `--assume-deps` | Skip dependency probing/auto-install |
+| `--assume-deps` | Skip dependency probing/auto-install (also valid with `--portable`) |
 | `--gui` / `--cli` | Force the graphical wizard / the text installer |
 | `--check-only` | Probe the system only; the tray is not started |
 
