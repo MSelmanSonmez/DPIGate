@@ -52,6 +52,9 @@ teardown() {
         PLAT_NOPROMPT=1 "$BASH" "$APP/kill.sh" >>"$DATA/helper.log" 2>&1
     fi
     cd / && rm -rf -- "$RD"
+    # /run/dpigate (or /dev/shm/dpigate) was made for this run dir: remove it too, but only
+    # when this was the last one. rmdir refuses a directory another user's session still uses.
+    rmdir -- "$(dirname "$RD")" 2>/dev/null
     return 0
 }
 trap 'teardown; exit 0' TERM INT HUP

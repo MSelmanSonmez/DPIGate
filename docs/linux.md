@@ -185,7 +185,8 @@ done: no `~/.local/share/DPIGate`, no systemd unit, no autostart entry, no menu 
   the system-service install does, with no capabilities set.
 - The tray runs as you, straight from the AppImage. A root helper watches the tray:
   when it exits, however it exits (Exit, a crash, `kill -9`, logging out), the helper
-  removes the firewall rules, stops the engine and deletes `/run/dpigate/<uid>/`. If the
+  removes the firewall rules, stops the engine and deletes `/run/dpigate/<uid>/` (and
+  `/run/dpigate/` itself when no other user's run dir is left in it). If the
   engine dies by itself the helper removes the rules too. Only a root `kill -9` of the
   helper itself can leave rules behind until the next start (they carry the `bypass`
   flag, so traffic keeps flowing) or a reboot.
@@ -194,7 +195,6 @@ done: no `~/.local/share/DPIGate`, no systemd unit, no autostart entry, no menu 
   `dpigate-1.0.1-x86_64.AppImage.config/`. If that folder cannot be created or written
   (read-only or removable media) the settings are kept in `~/.config/DPIGate` instead,
   and AppRun says so. To start over, delete the folder.
-- You can still edit **Program Filters** from the tray; the running engine picks the
   The AppImage runtime treats a folder named `<AppImage file name>.config` next to the
   AppImage as the AppImage's own config home and starts every run with `XDG_CONFIG_HOME`
   pointing at it (likewise `.home`, `.share`, `.cache` for `HOME`, `XDG_DATA_HOME`,
@@ -204,6 +204,7 @@ done: no `~/.local/share/DPIGate`, no systemd unit, no autostart entry, no menu 
   `~/.config`, and the account's home for `HOME`) before it starts anything. A custom
   `XDG_CONFIG_HOME` you had set yourself is replaced by the runtime before AppRun runs and
   cannot be recovered; DPIGate then uses `~/.config`.
+- You can still edit **Program Filters** from the tray; the running engine picks the
   changes up within a few seconds. Because the tray cannot restart the root engine,
   **DNS** and **Bypass All Traffic** choices are saved and take effect the next time you
   start DPIGate. The tray has no Auto Start and no Uninstall entry in this mode.

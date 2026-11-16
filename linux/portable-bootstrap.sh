@@ -122,7 +122,8 @@ for base in $BASES; do
     if [ -e "$cand" ] || [ -L "$cand" ]; then
         rm -rf -- "$cand" 2>/dev/null || continue
     fi
-    mkdir -m 0755 "$cand" 2>/dev/null || continue
+    # (the last session of another user may have just removed the then-empty base)
+    mkdir -m 0755 "$cand" 2>/dev/null || { prepare_base "$base" && mkdir -m 0755 "$cand" 2>/dev/null; } || continue
     mkdir -m 0755 "$cand/app" "$cand/data" "$cand/cfg" "$cand/fakehome" || { rm -rf -- "$cand"; continue; }
     # Programs must be able to run from here (/run is "noexec" on some hosts).
     if ! cp /bin/true "$cand/.exectest" 2>/dev/null || ! "$cand/.exectest" 2>/dev/null; then
@@ -132,9 +133,14 @@ for base in $BASES; do
     RD="$cand"
     break
 done
+if [ -z "$RD" ]; then
+    for base in $BASES; do rmdir -- "$base" 2>/dev/null; done   # only an empty one, only ours
+fi
 [ -n "$RD" ] || fail 13 "no root-owned directory that can run programs (tried: $BASES)"
 
-abort() { rm -rf -- "$RD"; fail "$1" "$2"; }
+# The base directory is removed again by the last session that leaves it empty
+# (rmdir: it refuses a directory that still holds another user's run dir).
+abort() { rm -rf -- "$RD"; rmdir -- "$(dirname "$RD")" 2>/dev/null; fail "$1" "$2"; }
 
 # ── copy first, then verify THE COPY, then extract the copy ─────────────────
 # At most 32 MiB: /run is memory.
