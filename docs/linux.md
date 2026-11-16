@@ -137,12 +137,19 @@ resolution, and build all OK.` Remaining `missing:` lines are real problems;
 
 ### AppImage
 
+> **Status: not yet working as a bundle.** The daemon is installed with
+> `setcap`, and the kernel then runs it in secure-execution mode, where the
+> `RUNPATH $ORIGIN/lib` used for the bundled libraries is ignored (measured with
+> glibc 2.44). Until the three C libraries are linked statically in the AppImage
+> build, the installed daemon needs `libnetfilter_queue`, `libnfnetlink` and
+> `libmnl` from the host. Do not rely on this AppImage without them.
+
 `linux/packaging/appimage/build-appimage.sh` builds a single-file x86_64 bundle,
-`dpigate-<version>-x86_64.AppImage`. It contains the `linux/` tree, the daemon and
-the three C libraries it links against (`libnetfilter_queue`, `libnfnetlink`,
-`libmnl`). It does **not** contain `nftables`, `iptables`, `libcap`, or the
-Python/GTK stack for the tray; those are still required on the host (see
-[Requirements](#requirements)).
+`dpigate-<version>-x86_64.AppImage`. It is meant to contain the `linux/` tree,
+the daemon and the three C libraries it links against (`libnetfilter_queue`,
+`libnfnetlink`, `libmnl`). It does **not** contain `nftables`, `iptables`,
+`libcap`, or the Python/GTK stack for the tray; those are still required on the
+host (see [Requirements](#requirements)).
 
 **Running it.** Make the file executable and start it:
 
@@ -154,8 +161,8 @@ chmod +x dpigate-<version>-x86_64.AppImage
 The first launch copies the payload out of the read-only AppImage to
 `~/.local/share/DPIGate/<version>/`, runs that copy's `install.sh --no-build`
 (it asks for root through `sudo`, `doas`, `pkexec` or `run0` when it needs it),
-copies the bundled libraries to `~/.local/share/DPIGate/lib/`, and starts the
-tray. Later launches of the same version only start the tray. A newer AppImage
+copies the bundled libraries to `~/.local/share/DPIGate/lib/` (this does not help
+the setcap'd daemon; see the status note above), and starts the tray. Later launches of the same version only start the tray. A newer AppImage
 copies and installs its own version; the older `<version>/` folders are not
 removed automatically.
 
@@ -203,11 +210,12 @@ APPIMAGETOOL=/path/to/appimagetool linux/packaging/appimage/build-appimage.sh [O
 The output defaults to `dist/` at the repository root. Without `appimagetool`
 the script stops with exit code 3 and keeps the staged AppDir. The version is
 read from `DPIGATE_VERSION` in `linux/goodbyedpi.c`. The binary is linked with
-`RUNPATH $ORIGIN/lib`, which is what lets the daemon find the bundled libraries
-even though `setcap` makes it ignore `LD_LIBRARY_PATH`.
+`RUNPATH $ORIGIN/lib`; that alone does not make a setcap'd daemon load bundled
+libraries (see the status note above).
 
-The bundled libraries come from the build host, so build on the oldest
-distribution you intend to support. The GitHub workflow
+The bundled libraries are copied from the build host, so the AppImage carries
+that host's versions and its glibc requirements. Build on a distribution whose
+glibc is no newer than the oldest one you need to support. The GitHub workflow
 `.github/workflows/appimage.yml` does this on demand (manual trigger) and uploads
 the AppImage as a run artifact; it does not create a release.
 

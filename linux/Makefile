@@ -33,12 +33,14 @@ SRCS += $(BYPASS_SRCS) goodbyedpi.c
 
 OBJS    = $(SRCS:.c=.o)
 
-# The daemon also looks for its libraries in $ORIGIN/lib, so an AppImage (or
-# any other relocated tree) can ship libnetfilter_queue/libnfnetlink/libmnl
-# next to the binary. RUNPATH rather than LD_LIBRARY_PATH: a binary with file
-# capabilities runs in secure-execution mode, which ignores LD_LIBRARY_PATH.
-# On a distro build the path simply does not exist and the system libraries
-# are used as before.
+# RUNPATH $ORIGIN/lib: lets an ordinary (non-setcap) run load libraries from
+# a directory next to the binary. It does NOT work for the daemon as installed:
+# a binary with file capabilities (setcap cap_net_raw,cap_net_admin+ep) runs
+# in secure-execution mode, and glibc ignored this RUNPATH there too (measured
+# with glibc 2.44). So the AppImage cannot rely on bundled shared libraries;
+# it needs static linking of libnetfilter_queue/libnfnetlink/libmnl, which
+# this Makefile does not provide yet. On a distro build the path does not
+# exist and the system libraries are used as before.
 TARGET_RPATH = -Wl,-rpath,'$$ORIGIN/lib'
 
 $(TARGET): $(OBJS)

@@ -150,8 +150,9 @@ fi
 
 # ── Step 2: install.sh from the copy, then the bundled libraries ────────────
 # install.sh copies only lib/*.sh into $DATA_DIR/lib, not the shared objects,
-# so this script copies lib*.so* there itself. The daemon's RUNPATH is
-# $ORIGIN/lib, i.e. $DATA_DIR/lib.
+# so this script copies lib*.so* there. This does NOT make the setcap'd daemon
+# use them: secure-execution ignores RUNPATH (see linux/Makefile). It only
+# helps a non-setcap run. Real AppImage support needs static linking.
 install_bundled_libs() {
     local libdir="$DATA_DIR/lib" so base
     mkdir -p "$libdir"
