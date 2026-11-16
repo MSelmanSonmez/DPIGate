@@ -1,0 +1,73 @@
+name: Build AppImage
+
+# Manual only. It produces the AppImage as a workflow artifact and does not
+# publish a release. appimagetool and the runtime are pinned and verified
+# by sha256 below.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  # Pinned, versioned release assets (not the "continuous" tags). The sha256
+  # values are the digests GitHub reports for these assets; the job refuses
+  # to run a tool or runtime whose hash does not match.
+  APPIMAGETOOL_URL: "https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-x86_64.AppImage"
+  APPIMAGETOOL_SHA256: "ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0"
+  # The type 2 runtime appimagetool embeds; pinned so the build does not
+  # download it from the network itself.
+  RUNTIME_URL: "https://github.com/AppImage/type2-runtime/releases/download/20251108/runtime-x86_64"
+  RUNTIME_SHA256: "2fca8b443c92510f1483a883f60061ad09b46b978b2631c807cd873a47ec260d"
+
+jobs:
+  appimage:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Install build dependencies
+        run: |
+          sudo DEBIAN_FRONTEND=noninteractive apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            build-essential pkg-config \
+            libnetfilter-queue-dev libnfnetlink-dev libmnl-dev
+
+      - name: Read version
+        id: version
+        run: |
+          v="$(sed -n 's/^#define[[:space:]]\{1,\}DPIGATE_VERSION[[:space:]]\{1,\}"\([^"]*\)".*/\1/p' linux/goodbyedpi.c | head -n 1)"
+          test -n "$v" || { echo "::error::cannot read DPIGATE_VERSION"; exit 1; }
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+
+      - name: Fetch appimagetool (verified)
+        run: |
+          test -n "$APPIMAGETOOL_URL" || { echo "::error::APPIMAGETOOL_URL is not set to a pinned release"; exit 1; }
+          test -n "$APPIMAGETOOL_SHA256" || { echo "::error::APPIMAGETOOL_SHA256 is not pinned yet"; exit 1; }
+          wget -q -O "$RUNNER_TEMP/appimagetool" "$APPIMAGETOOL_URL"
+          echo "$APPIMAGETOOL_SHA256  $RUNNER_TEMP/appimagetool" | sha256sum -c -
+          chmod 0755 "$RUNNER_TEMP/appimagetool"
+          echo "APPIMAGETOOL=$RUNNER_TEMP/appimagetool" >> "$GITHUB_ENV"
+
+      - name: Fetch the AppImage runtime (verified)
+        run: |
+          wget -q -O "$RUNNER_TEMP/runtime-x86_64" "$RUNTIME_URL"
+          echo "$RUNTIME_SHA256  $RUNNER_TEMP/runtime-x86_64" | sha256sum -c -
+          echo "APPIMAGE_RUNTIME_FILE=$RUNNER_TEMP/runtime-x86_64" >> "$GITHUB_ENV"
+
+      - name: Build AppImage
+        env:
+          # appimagetool runs without FUSE on the runner.
+          APPIMAGE_EXTRACT_AND_RUN: "1"
+        run: linux/packaging/appimage/build-appimage.sh dist
+
+      - name: Upload AppImage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dpigate-${{ steps.version.outputs.version }}-x86_64.AppImage
+          path: dist/dpigate-${{ steps.version.outputs.version }}-x86_64.AppImage
+          if-no-files-found: error

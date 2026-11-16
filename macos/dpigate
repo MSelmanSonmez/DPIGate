@@ -1,0 +1,502 @@
+#!/bin/bash
+# dpigate - run the DPIGate macOS SOCKS5 proxy and point the system at it.
+#
+# `run` switches the active network service to a clean DNS resolver, flushes
+# the macOS DNS cache (so poisoned answers from the old resolver are gone),
+# starts the proxy (SOCKS5 and HTTP CONNECT on one port), and only then points the
+# system SOCKS, web and secure web proxy settings at it and sets HTTPS_PROXY and
+# HTTP_PROXY for applications launched afterwards (launchctl setenv; apps such as
+# Discord's updater ignore the system proxy but honour these). The
+# previous settings are put back on exit (Ctrl-C, SIGTERM, SIGHUP, or the
+# proxy dying). They are kept in a state file, so `restore` can recover after
+# the script itself was killed.
+#
+# Must work with macOS' bash 3.2: no associative arrays, no ${var,,}, no mapfile.
+
+set -u
+set -f   # never glob: bypass entries like *.local are passed around as words
+
+NETWORKSETUP=${NETWORKSETUP:-/usr/sbin/networksetup}
+ROUTE=${ROUTE:-/sbin/route}
+SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
+# Inside DPIGate.app the proxy sits next to this script; from the source tree it is in build/.
+if [ -x "$SCRIPT_DIR/dpigate-proxy" ]; then DEFAULT_PROXY=$SCRIPT_DIR/dpigate-proxy; else DEFAULT_PROXY=$SCRIPT_DIR/build/dpigate-proxy; fi
+PROXY_BIN=${PROXY_BIN:-$DEFAULT_PROXY}
+STATE_DIR=${STATE_DIR:-$HOME/Library/Application Support/DPIGate}
+DPIGATE_PORT=${DPIGATE_PORT:-1080}
+# DPIGATE_DNS ("ip[:port] ...") is read by the proxy's own resolver (ports allowed). The system
+# resolver only takes plain port-53 servers, so DPIGATE_SYSTEM_DNS is derived from DPIGATE_DNS
+# (entries without a port, or ":53") unless set explicitly; fallback 1.1.1.1 1.0.0.1.
+system_dns_from() {
+  local w out=
+  for w in $1; do
+    case "$w" in
+      *:53) w=${w%:53};;
+      *:*) continue;;
+    esac
+    out="$out${out:+ }$w"
+  done
+  printf '%s' "$out"
+}
+if [ -z "${DPIGATE_SYSTEM_DNS:-}" ]; then
+  DPIGATE_SYSTEM_DNS=$(system_dns_from "${DPIGATE_DNS:-}")
+  [ -n "$DPIGATE_SYSTEM_DNS" ] || DPIGATE_SYSTEM_DNS="1.1.1.1 1.0.0.1"
+fi
+DSCACHEUTIL=${DSCACHEUTIL:-/usr/bin/dscacheutil}
+LAUNCHCTL=${LAUNCHCTL:-/bin/launchctl}
+OSASCRIPT=${OSASCRIPT:-/usr/bin/osascript}
+RESOLVE_CMD=${RESOLVE_CMD:-/usr/bin/dscacheutil -q host -a name}   # word-split; the name is appended
+DPIGATE_PROBE=${DPIGATE_PROBE:-discord.com}
+DPIGATE_WARMUP_SECS=${DPIGATE_WARMUP_SECS:-5}
+DPIGATE_BYPASS=${DPIGATE_BYPASS:-localhost 127.0.0.1 *.local 169.254/16 192.168/16 10/8 172.16/12}
+STATE_FILE=$STATE_DIR/state
+
+PROXY_PID=
+STATE_WRITTEN=0
+SOCKS_APPLIED=0
+WEB_APPLIED=0
+ENV_APPLIED=0
+CLEANED=0
+
+die() { echo "dpigate: $*" >&2; exit 1; }
+warn() { echo "dpigate: $*" >&2; }
+
+# Every networksetup call goes through here.
+ns() { "$NETWORKSETUP" "$@" </dev/null; }
+
+# Mutating networksetup call; explains permission failures.
+ns_set() {
+  local out rc
+  out=$(ns "$@" 2>&1); rc=$?
+  case "$out" in *"** Error"*) rc=1;; esac
+  if [ $rc -ne 0 ]; then
+    warn "networksetup $1 failed: $out"
+    warn "macOS may require an administrator account or password for this change."
+    warn "dpigate never calls sudo itself; run it from an admin account, or approve the system prompt."
+    return 1
+  fi
+  return 0
+}
+
+pid_alive() {
+  local s
+  s=$(ps -p "$1" -o stat= 2>/dev/null </dev/null) || return 1
+  s=${s// /}
+  case "$s" in ""|Z*) return 1;; esac
+  return 0
+}
+
+# stop_pid PID [COMM]: SIGINT, wait up to 2 s, then SIGKILL. If COMM is given the
+# process is only touched while its command name still matches (guards PID reuse).
+stop_pid() {
+  local pid=$1 comm=${2:-} cur i
+  [ -n "$pid" ] || return 0
+  pid_alive "$pid" || return 0
+  if [ -n "$comm" ]; then
+    cur=$(ps -p "$pid" -o comm= 2>/dev/null </dev/null)
+    [ "$cur" = "$comm" ] || return 0
+  fi
+  kill -INT "$pid" 2>/dev/null
+  i=0
+  while [ $i -lt 20 ] && pid_alive "$pid"; do sleep 0.1; i=$((i + 1)); done
+  if pid_alive "$pid"; then
+    kill -KILL "$pid" 2>/dev/null
+    sleep 0.1
+  fi
+  return 0
+}
+
+# Active network service: default route -> interface -> service name.
+default_service() {
+  local iface svc
+  iface=$("$ROUTE" -n get default </dev/null 2>/dev/null | awk '$1=="interface:"{print $2; exit}')
+  [ -n "$iface" ] || { warn "no default route found (not connected to a network?)"; return 1; }
+  svc=$(ns -listnetworkserviceorder 2>/dev/null | awk -v dev="$iface" '
+    /^\([0-9*]+\) /      { n = $0; sub(/^\([0-9*]+\) /, "", n); next }
+    /Device: /           { d = $0; sub(/.*Device: /, "", d); sub(/\).*/, "", d)
+                           if (d == dev) { print n; exit } }')
+  [ -n "$svc" ] || { warn "no network service found for interface $iface"; return 1; }
+  printf '%s\n' "$svc"
+}
+
+# read_proxy GETTER SERVICE: parse a networksetup -get...proxy answer into P_ENABLED/P_SERVER/P_PORT.
+read_proxy() {
+  local out
+  out=$(ns "-$1" "$2") || { warn "cannot read $1 of $2"; return 1; }
+  P_ENABLED=$(printf '%s\n' "$out" | awk '$1=="Enabled:"{print ($2=="Yes") ? "yes" : "no"; exit}')
+  P_SERVER=$(printf '%s\n' "$out" | awk '$1=="Server:"{print $2; exit}')
+  P_PORT=$(printf '%s\n' "$out" | awk '$1=="Port:"{print $2; exit}')
+  [ -n "$P_PORT" ] || P_PORT=0
+  return 0
+}
+
+# Read the current settings of service $1 into CUR_* variables.
+read_current() {
+  local svc=$1 out
+  out=$(ns -getsocksfirewallproxy "$svc") || { warn "cannot read proxy settings of $svc"; return 1; }
+  CUR_SOCKS_ENABLED=$(printf '%s\n' "$out" | awk '$1=="Enabled:"{print ($2=="Yes") ? "yes" : "no"; exit}')
+  CUR_SOCKS_SERVER=$(printf '%s\n' "$out" | awk '$1=="Server:"{print $2; exit}')
+  CUR_SOCKS_PORT=$(printf '%s\n' "$out" | awk '$1=="Port:"{print $2; exit}')
+  out=$(ns -getproxybypassdomains "$svc") || { warn "cannot read bypass domains of $svc"; return 1; }
+  case "$out" in
+    "There aren't any"*|"") CUR_BYPASS=Empty;;
+    *) CUR_BYPASS=$(printf '%s\n' "$out" | tr '\n' ' ' | sed 's/ *$//');;
+  esac
+  out=$(ns -getdnsservers "$svc") || { warn "cannot read DNS servers of $svc"; return 1; }
+  case "$out" in
+    "There aren't any"*|"") CUR_DNS=Empty;;
+    *) CUR_DNS=$(printf '%s\n' "$out" | tr '\n' ' ' | sed 's/ *$//');;
+  esac
+  [ -n "$CUR_SOCKS_PORT" ] || CUR_SOCKS_PORT=0
+  read_proxy getwebproxy "$svc" || return 1
+  CUR_WEB_ENABLED=$P_ENABLED CUR_WEB_SERVER=$P_SERVER CUR_WEB_PORT=$P_PORT
+  read_proxy getsecurewebproxy "$svc" || return 1
+  CUR_SWEB_ENABLED=$P_ENABLED CUR_SWEB_SERVER=$P_SERVER CUR_SWEB_PORT=$P_PORT
+  CUR_ENV_HTTPS=$("$LAUNCHCTL" getenv HTTPS_PROXY </dev/null 2>/dev/null)
+  CUR_ENV_HTTP=$("$LAUNCHCTL" getenv HTTP_PROXY </dev/null 2>/dev/null)
+  return 0
+}
+
+write_state() {
+  mkdir -p "$STATE_DIR" && chmod 700 "$STATE_DIR" || return 1
+  {
+    printf 'version=1\n'
+    printf 'service=%s\n' "$1"
+    printf 'script_pid=%s\n' "$$"
+    printf 'proxy_pid=%s\n' "$PROXY_PID"
+    printf 'proxy_comm=%s\n' "$2"
+    printf 'socks_applied=%s\n' "$SOCKS_APPLIED"
+    printf 'socks_enabled=%s\n' "$CUR_SOCKS_ENABLED"
+    printf 'socks_server=%s\n' "$CUR_SOCKS_SERVER"
+    printf 'socks_port=%s\n' "$CUR_SOCKS_PORT"
+    printf 'bypass=%s\n' "$CUR_BYPASS"
+    printf 'dns=%s\n' "$CUR_DNS"
+    printf 'web_applied=%s\n' "$WEB_APPLIED"
+    printf 'web_enabled=%s\n' "$CUR_WEB_ENABLED"
+    printf 'web_server=%s\n' "$CUR_WEB_SERVER"
+    printf 'web_port=%s\n' "$CUR_WEB_PORT"
+    printf 'sweb_enabled=%s\n' "$CUR_SWEB_ENABLED"
+    printf 'sweb_server=%s\n' "$CUR_SWEB_SERVER"
+    printf 'sweb_port=%s\n' "$CUR_SWEB_PORT"
+    printf 'env_applied=%s\n' "$ENV_APPLIED"
+    printf 'env_https=%s\n' "$CUR_ENV_HTTPS"
+    printf 'env_http=%s\n' "$CUR_ENV_HTTP"
+  } > "$STATE_FILE.tmp" && mv "$STATE_FILE.tmp" "$STATE_FILE"
+}
+
+# Load the state file into S_* variables (no eval; plain key=value lines).
+load_state() {
+  local line key val
+  S_SERVICE= S_SCRIPT_PID= S_PROXY_PID= S_PROXY_COMM=
+  S_SOCKS_APPLIED=1 S_SOCKS_ENABLED=no S_SOCKS_SERVER= S_SOCKS_PORT=0 S_BYPASS=Empty S_DNS=Empty
+  # Fields added later: absent in old state files, so default to "do not touch".
+  S_WEB_APPLIED=0 S_WEB_ENABLED=no S_WEB_SERVER= S_WEB_PORT=0
+  S_SWEB_ENABLED=no S_SWEB_SERVER= S_SWEB_PORT=0
+  S_ENV_APPLIED=0 S_ENV_HTTPS= S_ENV_HTTP=
+  while IFS= read -r line || [ -n "$line" ]; do
+    key=${line%%=*}; val=${line#*=}
+    case "$key" in
+      service) S_SERVICE=$val;;
+      script_pid) S_SCRIPT_PID=$val;;
+      proxy_pid) S_PROXY_PID=$val;;
+      proxy_comm) S_PROXY_COMM=$val;;
+      socks_applied) S_SOCKS_APPLIED=$val;;
+      socks_enabled) S_SOCKS_ENABLED=$val;;
+      socks_server) S_SOCKS_SERVER=$val;;
+      socks_port) S_SOCKS_PORT=$val;;
+      bypass) S_BYPASS=$val;;
+      dns) S_DNS=$val;;
+      web_applied) S_WEB_APPLIED=$val;;
+      web_enabled) S_WEB_ENABLED=$val;;
+      web_server) S_WEB_SERVER=$val;;
+      web_port) S_WEB_PORT=$val;;
+      sweb_enabled) S_SWEB_ENABLED=$val;;
+      sweb_server) S_SWEB_SERVER=$val;;
+      sweb_port) S_SWEB_PORT=$val;;
+      env_applied) S_ENV_APPLIED=$val;;
+      env_https) S_ENV_HTTPS=$val;;
+      env_http) S_ENV_HTTP=$val;;
+    esac
+  done < "$STATE_FILE"
+  [ -n "$S_SERVICE" ] || { warn "state file $STATE_FILE has no service; remove it by hand"; return 1; }
+  return 0
+}
+
+# restore_env NAME VALUE: put a launchctl environment variable back (empty VALUE = unset it).
+restore_env() {
+  if [ -n "$2" ]; then
+    "$LAUNCHCTL" setenv "$1" "$2" </dev/null >/dev/null 2>&1 || { warn "launchctl setenv $1 failed"; return 1; }
+  else
+    "$LAUNCHCTL" unsetenv "$1" </dev/null >/dev/null 2>&1 || { warn "launchctl unsetenv $1 failed"; return 1; }
+  fi
+  return 0
+}
+
+# restore_proxy KIND SERVICE ENABLED SERVER PORT: KIND is web or secureweb.
+restore_proxy() {
+  local kind=$1 svc=$2 enabled=$3 server=$4 port=$5
+  if [ -n "$server" ] && [ "$port" != 0 ]; then
+    ns_set "-set${kind}proxy" "$svc" "$server" "$port" || return 1
+  else
+    ns "-set${kind}proxy" "$svc" "" 0 >/dev/null 2>&1   # best effort, like SOCKS
+  fi
+  if [ "$enabled" = yes ]; then
+    ns_set "-set${kind}proxystate" "$svc" on || return 1
+  else
+    ns_set "-set${kind}proxystate" "$svc" off || return 1
+  fi
+  return 0
+}
+
+# Put the saved settings back, stop the saved proxy, delete the state file.
+# The state file is kept when anything fails so `restore` can be retried.
+restore_state() {
+  [ -f "$STATE_FILE" ] || return 0
+  load_state || return 1
+  local rc=0
+  # Environment first (it was applied last). Empty previous value = it was not set.
+  if [ "$S_ENV_APPLIED" = 1 ]; then
+    restore_env HTTPS_PROXY "$S_ENV_HTTPS" || rc=1
+    restore_env HTTP_PROXY "$S_ENV_HTTP" || rc=1
+  fi
+  if [ "$S_WEB_APPLIED" = 1 ]; then
+    restore_proxy web "$S_SERVICE" "$S_WEB_ENABLED" "$S_WEB_SERVER" "$S_WEB_PORT" || rc=1
+    restore_proxy secureweb "$S_SERVICE" "$S_SWEB_ENABLED" "$S_SWEB_SERVER" "$S_SWEB_PORT" || rc=1
+  fi
+  # SOCKS and bypass list are only touched if run got as far as applying them.
+  if [ "$S_SOCKS_APPLIED" = 1 ]; then
+    if [ -n "$S_SOCKS_SERVER" ] && [ "$S_SOCKS_PORT" != 0 ]; then
+      ns_set -setsocksfirewallproxy "$S_SERVICE" "$S_SOCKS_SERVER" "$S_SOCKS_PORT" || rc=1
+    else
+      # Previously no server at all: clear ours. Best effort, real networksetup may refuse
+      # an empty server (LOW: then 127.0.0.1:1080 stays configured, but disabled).
+      ns -setsocksfirewallproxy "$S_SERVICE" "" 0 >/dev/null 2>&1
+    fi
+    if [ "$S_SOCKS_ENABLED" = yes ]; then
+      ns_set -setsocksfirewallproxystate "$S_SERVICE" on || rc=1
+    else
+      ns_set -setsocksfirewallproxystate "$S_SERVICE" off || rc=1
+    fi
+    # $S_BYPASS / $S_DNS are intentionally unquoted: space separated lists (globbing is off).
+    ns_set -setproxybypassdomains "$S_SERVICE" $S_BYPASS || rc=1
+  fi
+  ns_set -setdnsservers "$S_SERVICE" $S_DNS || rc=1
+  if [ $rc -ne 0 ]; then
+    warn "could not restore all settings of '$S_SERVICE'. State kept in $STATE_FILE; run 'dpigate restore' to retry."
+    return 1
+  fi
+  flush_dns nohup
+  stop_pid "$S_PROXY_PID" "$S_PROXY_COMM"
+  rm -f "$STATE_FILE" "$STATE_FILE.tmp"
+  return 0
+}
+
+# flush_dns [hup]: flush the resolver cache. With "hup" also HUP mDNSResponder, which needs
+# root: macOS' own password dialog (osascript) is used, never sudo.
+flush_dns() {
+  "$DSCACHEUTIL" -flushcache </dev/null >/dev/null 2>&1 || warn "dscacheutil -flushcache failed"
+  [ "${1:-}" = hup ] || return 0
+  echo "dpigate: macOS will ask for your password to flush the DNS cache."
+  if ! "$OSASCRIPT" -e 'do shell script "killall -HUP mDNSResponder" with administrator privileges' </dev/null >/dev/null 2>&1; then
+    warn "DNS cache not flushed; first loads may be slow"
+  fi
+}
+
+resolve_ip() {
+  # shellcheck disable=SC2086
+  $RESOLVE_CMD "$DPIGATE_PROBE" </dev/null 2>/dev/null | awk '/^ip_address:/{print $2; exit}'
+}
+
+# warm_up OLD_IP: wait until the system resolver gives a fresh answer for the probe name.
+warm_up() {
+  local old=$1 ip i=0 max
+  max=$(awk -v s="$DPIGATE_WARMUP_SECS" 'BEGIN{printf "%d", s * 4}')
+  while :; do
+    ip=$(resolve_ip)
+    if [ -n "$ip" ] && [ "$ip" != "$old" ]; then return 0; fi
+    [ $i -ge "$max" ] && break
+    sleep 0.25
+    i=$((i + 1))
+  done
+  warn "resolver still answers '$DPIGATE_PROBE' like before after ${DPIGATE_WARMUP_SECS}s; continuing, first loads may be slow"
+  return 0
+}
+
+cleanup() {
+  [ "$CLEANED" = 1 ] && return
+  CLEANED=1
+  trap '' INT TERM HUP
+  if [ "$STATE_WRITTEN" = 1 ]; then
+    echo "dpigate: restoring previous network settings..."
+    restore_state
+  fi
+  [ -n "$PROXY_PID" ] && stop_pid "$PROXY_PID"
+}
+
+wait_for_listener() {
+  local i=0
+  while [ $i -lt 30 ]; do
+    pid_alive "$PROXY_PID" || return 1
+    if lsof -nP -iTCP:"$DPIGATE_PORT" -sTCP:LISTEN -t </dev/null 2>/dev/null | grep -qx "$PROXY_PID"; then
+      return 0
+    fi
+    sleep 0.1
+    i=$((i + 1))
+  done
+  return 1
+}
+
+# reap_orphan: after load_state. If the run that wrote the state is still alive but its owner is gone
+# (the menu bar app was killed: the run is re-parented to launchd, ppid 1) stop it with SIGTERM so its own
+# cleanup puts the settings back. Only a process whose command line is this kind of `dpigate ... run`
+# is signalled, so a reused pid is never touched.
+reap_orphan() {
+  local pid=$S_SCRIPT_PID cmd i
+  [ -n "$pid" ] && pid_alive "$pid" || return 0
+  cmd=$(ps -p "$pid" -o command= </dev/null 2>/dev/null)
+  case "$cmd" in *dpigate*" run"*) ;; *) return 0;; esac
+  [ "$(ps -p "$pid" -o ppid= </dev/null 2>/dev/null | tr -d ' ')" = 1 ] || return 0
+  echo "dpigate: stopping a run (pid $pid) whose owner is gone"
+  kill -TERM "$pid" 2>/dev/null
+  i=0
+  while [ $i -lt 100 ] && pid_alive "$pid"; do sleep 0.1; i=$((i + 1)); done
+}
+
+cmd_run() {
+  [ "${1:-}" = "--" ] && shift
+  [ -x "$PROXY_BIN" ] || die "proxy binary not found: $PROXY_BIN (build it with: make -C macos)"
+  local svc comm
+  svc=$(default_service) || exit 1
+
+  if [ -f "$STATE_FILE" ]; then
+    load_state || exit 1
+    reap_orphan
+    if [ -n "$S_SCRIPT_PID" ] && pid_alive "$S_SCRIPT_PID"; then
+      die "another dpigate run seems active (pid $S_SCRIPT_PID); stop it first"
+    fi
+    if [ -f "$STATE_FILE" ]; then   # the orphan's own cleanup may already have restored and removed it
+      echo "dpigate: previous run did not exit cleanly; restoring its settings first"
+      restore_state || die "could not restore previous settings; fix the error above, then run 'dpigate restore'"
+    fi
+  fi
+
+  read_current "$svc" || exit 1
+  local old_ip
+  old_ip=$(resolve_ip)
+
+  # Settings are saved before the first change; the cleanup trap restores them on any exit.
+  write_state "$svc" "" || die "cannot write state file $STATE_FILE"
+  STATE_WRITTEN=1
+  trap cleanup EXIT
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
+  trap 'exit 129' HUP
+
+  # DNS first, then a cache flush, so the proxy never resolves through stale answers.
+  ns_set -setdnsservers "$svc" $DPIGATE_SYSTEM_DNS || die "could not set DNS; restoring the previous settings"
+  flush_dns hup
+  warm_up "$old_ip"
+
+  # Job control gives the proxy its own process group with default signal
+  # handling (background jobs of a non-interactive shell would ignore SIGINT).
+  set -m
+  # SOCKS5 and HTTP CONNECT share the port; user arguments come last.
+  "$PROXY_BIN" -i socks5://127.0.0.1 -i http://127.0.0.1 -p "$DPIGATE_PORT" --tlsrec 1+s "$@" </dev/null &
+  PROXY_PID=$!
+  write_state "$svc" "" || die "cannot write state file $STATE_FILE"
+
+  if ! wait_for_listener; then
+    die "proxy did not start listening on 127.0.0.1:$DPIGATE_PORT; restoring the previous settings"
+  fi
+  comm=$(ps -p "$PROXY_PID" -o comm= 2>/dev/null </dev/null)
+  local url=http://127.0.0.1:$DPIGATE_PORT
+  SOCKS_APPLIED=1 WEB_APPLIED=1 ENV_APPLIED=1
+  write_state "$svc" "$comm" || die "cannot write state file $STATE_FILE"
+
+  ns_set -setsocksfirewallproxy "$svc" 127.0.0.1 "$DPIGATE_PORT" \
+    && ns_set -setsocksfirewallproxystate "$svc" on \
+    && ns_set -setproxybypassdomains "$svc" $DPIGATE_BYPASS \
+    && ns_set -setwebproxy "$svc" 127.0.0.1 "$DPIGATE_PORT" \
+    && ns_set -setwebproxystate "$svc" on \
+    && ns_set -setsecurewebproxy "$svc" 127.0.0.1 "$DPIGATE_PORT" \
+    && ns_set -setsecurewebproxystate "$svc" on \
+    || die "could not apply settings; restoring the previous ones"
+
+  # Only applications started from now on inherit these.
+  "$LAUNCHCTL" setenv HTTPS_PROXY "$url" </dev/null >/dev/null 2>&1 \
+    && "$LAUNCHCTL" setenv HTTP_PROXY "$url" </dev/null >/dev/null 2>&1 \
+    || die "could not set HTTPS_PROXY/HTTP_PROXY; restoring the previous settings"
+  echo "dpigate: running on '$svc' (SOCKS5 + HTTP 127.0.0.1:$DPIGATE_PORT, DNS $DPIGATE_SYSTEM_DNS). Press Ctrl-C to stop."
+  echo "dpigate: Restart apps such as Discord after starting dpigate; HTTPS_PROXY only reaches apps launched afterwards."
+  while pid_alive "$PROXY_PID"; do
+    wait "$PROXY_PID"
+  done
+  warn "proxy exited unexpectedly"
+  exit 1
+}
+
+cmd_restore() {
+  if [ ! -f "$STATE_FILE" ]; then
+    echo "dpigate: nothing to restore"
+    return 0
+  fi
+  load_state || return 1
+  reap_orphan
+  if [ -n "$S_SCRIPT_PID" ] && pid_alive "$S_SCRIPT_PID"; then
+    die "a dpigate run is still active (pid $S_SCRIPT_PID); stop it with Ctrl-C instead"
+  fi
+  if [ ! -f "$STATE_FILE" ]; then echo "dpigate: previous settings restored"; return 0; fi
+  restore_state || return 1
+  echo "dpigate: previous settings restored"
+}
+
+cmd_status() {
+  local svc g
+  if [ -f "$STATE_FILE" ] && load_state; then
+    if pid_alive "$S_PROXY_PID"; then
+      echo "proxy:   running (pid $S_PROXY_PID, started by dpigate pid $S_SCRIPT_PID)"
+    else
+      echo "proxy:   not running, but a state file exists: run 'dpigate restore'"
+    fi
+  else
+    echo "proxy:   not running (no state file)"
+  fi
+  if svc=$(default_service 2>/dev/null); then
+    echo "service: $svc"
+    echo "socks:   $(ns -getsocksfirewallproxy "$svc" 2>&1 | awk '$1=="Enabled:"{e=$2} $1=="Server:"{s=$2} $1=="Port:"{p=$2} END{print "enabled=" e " server=" s " port=" p}')"
+    for g in web secureweb; do
+      echo "$g:$(printf '%*s' $((8 - ${#g})) '')$(ns -get${g}proxy "$svc" 2>&1 | awk '$1=="Enabled:"{e=$2} $1=="Server:"{s=$2} $1=="Port:"{p=$2} END{print "enabled=" e " server=" s " port=" p}')"
+    done
+    echo "env:     HTTPS_PROXY=$("$LAUNCHCTL" getenv HTTPS_PROXY </dev/null 2>&1) HTTP_PROXY=$("$LAUNCHCTL" getenv HTTP_PROXY </dev/null 2>&1)"
+    echo "dns:     $(ns -getdnsservers "$svc" 2>&1 | tr '\n' ' ' | sed 's/ *$//')"
+  else
+    echo "service: unknown (no default route)"
+  fi
+}
+
+cmd_help() {
+  cat <<'EOF'
+Usage: dpigate <command>
+
+  run [-- <proxy args>]
+                          set DNS (1.1.1.1, 1.0.0.1), flush the DNS cache (macOS asks for your
+                          password once), start the proxy (SOCKS5 + HTTP CONNECT on one port), then set the
+                          system SOCKS/web/secure web proxies and HTTPS_PROXY/HTTP_PROXY for apps
+                          started afterwards (restart Discord); Ctrl-C stops it and restores the previous settings
+  restore                 restore the saved settings after a crash or kill -9
+  status                  show whether the proxy runs and the current proxy/DNS settings
+  help                    show this text
+
+Environment: NETWORKSETUP, ROUTE, PROXY_BIN, STATE_DIR, DPIGATE_PORT (default 1080), DPIGATE_DNS (proxy
+resolver servers, "ip[:port] ..."), DPIGATE_SYSTEM_DNS (system DNS, derived from DPIGATE_DNS when unset),
+DSCACHEUTIL, LAUNCHCTL, OSASCRIPT, RESOLVE_CMD, DPIGATE_PROBE (default discord.com), DPIGATE_WARMUP_SECS (default 5).
+EOF
+}
+
+case "${1:-help}" in
+  run) shift; cmd_run "$@";;
+  restore) cmd_restore;;
+  status) cmd_status;;
+  help|-h|--help) cmd_help;;
+  *) cmd_help >&2; exit 2;;
+esac

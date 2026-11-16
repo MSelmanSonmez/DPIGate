@@ -138,11 +138,33 @@ _plat_dnf_enable_el_repos() {
 }
 
 
-# plat_deps_install ROLE   ROLE = build|runtime|all
+# _plat_nfq_req_for MGR -> the runtime (non-development) packages of the three
+# libraries the daemon links against: libnetfilter_queue, libnfnetlink, libmnl.
+# Empty when the manager's runtime names are not defined here; the caller then
+# reports the gap instead of guessing a name.
+_plat_nfq_req_for() {
+    case "$1" in
+        pacman)  echo "libnetfilter_queue libnfnetlink libmnl" ;;
+        apt)     echo "libnetfilter-queue1 libnfnetlink0 libmnl0" ;;
+        dnf|yum) echo "libnetfilter_queue libnfnetlink libmnl" ;;
+        *)       echo "" ;;
+    esac
+}
+
+# plat_deps_install ROLE   ROLE = build|runtime|all|nfq|tray|appimage
+#   nfq      - only the runtime libraries of _plat_nfq_req_for (no compiler, no -dev)
+#   tray     - only the tray packages (run_opt): notification helper, python3-gi,
+#              GTK 3, AyatanaAppIndicator3. NOT zenity and NOT polkit: those are
+#              the password prompts, and the prompt is shown before any package
+#              can be installed, so installing them here would not help the
+#              first run (install.sh's runtime/all roles still install them).
+#   appimage - nfq + tray in one call: one package-index refresh, and one
+#              escalation when the mechanism prompts per call (pkexec/run0)
 plat_deps_install() {
     local role="${1:-all}"
     local mgr; mgr="$(plat_pkgmgr)"
     local build_req="" run_req="" run_opt="" pre="" rc=0
+    local nfq_req; nfq_req="$(_plat_nfq_req_for "$mgr")"
 
     case "$mgr" in
         apt)
@@ -215,15 +237,23 @@ plat_deps_install() {
     case "$role" in
         build)   pkgs="$build_req" ;;
         runtime) pkgs="$run_req" ;;
+        nfq)     pkgs="$nfq_req" ;;
+        tray)    pkgs="" ;;     # tray packages are installed one by one below
+        appimage) pkgs="$nfq_req" ;;
         *)       pkgs="$build_req $run_req" ;;
     esac
 
-    if [ -n "$pkgs" ]; then
-        if [ "$mgr" = "apt" ]; then
+    # Refresh the package index whenever anything is going to be installed,
+    # including the tray-only role (it has no batch list, only run_opt).
+    if [ "$mgr" = "apt" ]; then
+        if [ -n "$pkgs" ] || { [ "$role" != "build" ] && [ "$role" != "nfq" ] && [ -n "$run_opt" ]; }; then
             rc=0
             plat_run_root apt-get update -qq || rc=$?
             if [ "$rc" -eq 2 ]; then return 2; fi
         fi
+    fi
+
+    if [ -n "$pkgs" ]; then
         # One transaction first (fast, resolves conflicts as a set). If it
         # fails — a single renamed/absent package name aborts the whole
         # transaction on dnf/zypper — retry package by package so the rest
@@ -247,9 +277,13 @@ plat_deps_install() {
         fi
     fi
 
-    if [ "$role" != "build" ]; then
+    if [ "$role" != "build" ] && [ "$role" != "nfq" ]; then
         local p
         for p in $run_opt; do
+            case "$role:$p" in
+                tray:*zenity|tray:*polkit*|tray:*policykit*) continue ;;
+                appimage:*zenity|appimage:*polkit*|appimage:*policykit*) continue ;;
+            esac
             rc=0
             _plat_pkg_install "$mgr" "$p" || rc=$?
             if [ "$rc" -eq 2 ]; then return 2; fi
@@ -259,9 +293,11 @@ plat_deps_install() {
     # Report the CAPABILITY outcome, not the package-manager exit code: a
     # transaction can "succeed" while the compiler is still missing, and it
     # can fail on one optional name while everything required got installed.
-    if [ "$role" = "runtime" ]; then
-        return 0
-    fi
+    # nfq, tray and appimage roles are checked by the caller (AppRun), which knows which
+    # libraries and typelibs it needs; a compiler check would be wrong there.
+    case "$role" in
+        runtime|nfq|tray|appimage) return 0 ;;
+    esac
     if plat_deps_check >/dev/null; then
         return 0
     fi
@@ -294,6 +330,12 @@ _plat_pkg_install() {
 plat_deps_check() {
     local ok=0
     local cc=""
+    # PLAT_DEPS_RUNTIME_ONLY=1: the caller ships a prebuilt binary (install.sh
+    # --no-build), so the compiler, make and the development headers are not
+    # required. The runtime probes at the end still run.
+    local build_probe=1
+    [ "${PLAT_DEPS_RUNTIME_ONLY:-0}" = "1" ] && build_probe=0
+    if [ "$build_probe" -eq 1 ]; then
     if command -v cc >/dev/null 2>&1; then cc=cc
     elif command -v gcc >/dev/null 2>&1; then cc=gcc
     elif command -v clang >/dev/null 2>&1; then cc=clang
@@ -345,6 +387,7 @@ EOF
             rm -rf "$tmpd"
         fi
     fi
+    fi   # build_probe
 
     if ! command -v setcap >/dev/null 2>&1; then echo "missing: setcap (libcap)"; ok=1; fi
     if ! command -v nft >/dev/null 2>&1 && ! command -v iptables >/dev/null 2>&1; then
@@ -426,7 +469,10 @@ plat_root_cmd() {
 plat_run_root() {
     local mech rc=0 what="$*"
     # Keep log lines short: a sh -c body is a whole script ($3), $4 is its $0.
-    if [ "${1:-}" = sh ] && [ "${2:-}" = "-c" ]; then what="sh -c <script> ${*:5}"; fi
+    case "${1:-}" in
+        sh|bash|/bin/sh|/bin/bash|/usr/bin/sh|/usr/bin/bash)
+            if [ "${2:-}" = "-c" ]; then what="$1 -c <script> ${*:5}"; fi ;;
+    esac
     if ! mech="$(plat_root_cmd)"; then
         echo "plat_run_root failed (rc=1) via none: $what" | tee -a "$PLAT_LOG" >&2
         return 1

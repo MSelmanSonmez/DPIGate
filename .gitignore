@@ -51,3 +51,6 @@ __pycache__/
 *.rej
 *~
 *.swp
+
+# macOS port build output
+macos/build/

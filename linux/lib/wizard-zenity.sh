@@ -109,7 +109,7 @@ wizard_zenity_main() {
     # progress text so a stuck step is visible instead of a frozen pulse.
     local logfile; logfile="$(mktemp -t gdpi-install-XXXXXX.log)"
     (
-        GDPI_INSTALL_GUI=0 bash "$installer" "${args[@]}" 2>&1 | tee "$logfile"
+        SUDO_PASSWORD="${SUDO_PASSWORD:-}" GDPI_INSTALL_GUI=0 bash "$installer" "${args[@]}" 2>&1 | tee "$logfile"
         echo "${PIPESTATUS[0]}" > "$logfile.rc"
     ) | sed -u 's/^/# /' | zenity --progress --pulsate --auto-close --no-cancel \
             --title="$title" --width=520 \
@@ -126,6 +126,9 @@ wizard_zenity_main() {
         rm -f "$logfile" "$logfile.rc"
         if [ "$do_launch" = "1" ] && [ -x "$data_dir/start.sh" ]; then
             ( cd "$data_dir" && setsid "$data_dir/start.sh" >/dev/null 2>&1 & ) || true
+            # Tell a caller that starts DPIGate itself (the AppImage's AppRun) that this
+            # already happened: two starters race for the tray.
+            [ -n "${GDPI_LAUNCH_REPORT:-}" ] && echo launched > "$GDPI_LAUNCH_REPORT" 2>/dev/null || true
         fi
         return 0
     fi

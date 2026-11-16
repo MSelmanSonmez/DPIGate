@@ -11,6 +11,12 @@
 # Usage:
 #   ./tray-launcher.sh           # normal launch (autostart / manual)
 #   ./tray-launcher.sh --check   # verify Auto Start state (diagnostic)
+#   ./tray-launcher.sh --portable  # AppImage run-without-installing: the engine
+#                                  # is already running as root (started by the
+#                                  # AppImage's root helper, which also watches
+#                                  # this process and tears everything down when
+#                                  # it exits). Start nothing, spawn no reaper,
+#                                  # just attach the tray to the running engine.
 
 set -e
 
@@ -29,8 +35,8 @@ fi
 # password in its environment. See plat_password_unexport in lib/platform.sh.
 plat_password_unexport
 
-DATA_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/DPIGate"
-CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/DPIGate"
+DATA_DIR="${GDPI_DATA_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/DPIGate}"
+CONFIG_DIR="${GDPI_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/DPIGate}"
 PID_FILE="$DATA_DIR/goodbyedpi.pid"
 PROGRAMS_LIST="$CONFIG_DIR/ProgramFilters"
 SETTINGS_FILE="$CONFIG_DIR/settings"
@@ -46,6 +52,11 @@ _config_get() {
     fi
     [ -n "$val" ] && printf '%s\n' "$val" || printf '%s\n' "$default"
 }
+
+PORTABLE=0
+if [ "${1:-}" = "--portable" ]; then
+    PORTABLE=1
+fi
 
 ICON_PATH="$APP_DIR/icon.png"
 SYSTEMD_USER_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
@@ -150,6 +161,18 @@ if [ "${1:-}" = "--check" ]; then
     exit "$_verdict"
 fi
 
+# ── A tray is already running: nothing to do ────────────────────────────────
+# Autostart plus the menu entry plus an installer's own launch can all start this at
+# the same moment. The running tray owns the engine and the firewall rules: starting
+# anything here would restart the engine under it and, if the second tray then exits
+# as "already running", tear the whole session down. tray.py --check-running only
+# looks (a shared lock probe); a tray.py without it exits 2, which is "not running".
+if [ "$PORTABLE" -eq 0 ] && command -v python3 >/dev/null 2>&1 \
+   && python3 "$APP_DIR/tray.py" --check-running >/dev/null 2>&1; then
+    echo "[tray-launcher] a DPIGate tray is already running; nothing to do" >&2
+    exit 0
+fi
+
 # ── Tray precondition probe ─────────────────────────────────────────────────
 # Probe for a working tray stack BEFORE starting the daemon. The daemon's
 # lifetime must be bound to a *visible* tray — if the stack can't render a
@@ -167,9 +190,20 @@ fi
 GDPI_PID=0
 if [ -f "$PID_FILE" ]; then
     PID_CANDIDATE="$(cat "$PID_FILE" 2>/dev/null)"
-    if [ -n "$PID_CANDIDATE" ] && kill -0 "$PID_CANDIDATE" 2>/dev/null; then
+    if [ "$PORTABLE" -eq 1 ]; then
+        # The engine is root's: kill -0 would answer EPERM, so ask /proc.
+        case "$PID_CANDIDATE" in
+            ''|*[!0-9]*) ;;
+            *) if [ -d "/proc/$PID_CANDIDATE" ]; then GDPI_PID="$PID_CANDIDATE"; fi ;;
+        esac
+    elif [ -n "$PID_CANDIDATE" ] && kill -0 "$PID_CANDIDATE" 2>/dev/null; then
         GDPI_PID="$PID_CANDIDATE"
     fi
+fi
+
+if [ "$PORTABLE" -eq 1 ] && [ "$GDPI_PID" -le 0 ]; then
+    echo "[tray-launcher] --portable: no running engine found in $PID_FILE" >&2
+    exit 1
 fi
 
 if [ "$GDPI_PID" -le 0 ]; then
@@ -301,13 +335,14 @@ fi
 # autostart path nothing watches the tray: a SIGKILL or a hard session
 # teardown would orphan goodbyedpi and the nft rules. The exec below replaces
 # this shell with tray.py, so $$ is exactly the PID the reaper must watch.
-if [ "$GDPI_PID" -gt 0 ] && [ -x "$APP_DIR/reaper.sh" ]; then
+if [ "$PORTABLE" -eq 0 ] && [ "$GDPI_PID" -gt 0 ] && [ -x "$APP_DIR/reaper.sh" ]; then
     setsid "$APP_DIR/reaper.sh" "$$" </dev/null >/dev/null 2>&1 &
     disown 2>/dev/null || true
 fi
 
 # Launch the tray
 exec env \
+    GDPI_PORTABLE="$PORTABLE" \
     GDPI_PID="$GDPI_PID" \
     GDPI_PROGRAMS="$PROGRAMS_LIST" \
     GDPI_START_SH="$APP_DIR/start.sh" \
