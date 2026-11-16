@@ -299,7 +299,13 @@ resolve_cfg_dir() {
     local d
     if [ -n "${APPIMAGE:-}" ] && [ -f "$APPIMAGE" ]; then
         d="${APPIMAGE}.config"
-        if { [ -d "$d" ] || mkdir -p "$d" 2>/dev/null; } && [ -w "$d" ] && [ -x "$d" ]; then
+        if [ "$DRY_RUN" -eq 1 ]; then
+            # a dry run creates nothing: only say where it would go
+            if [ -d "$d" ] && [ -w "$d" ] || { [ ! -e "$d" ] && [ -w "$(dirname "$d")" ]; }; then
+                printf '%s' "$d"
+                return 0
+            fi
+        elif { [ -d "$d" ] || mkdir -p "$d" 2>/dev/null; } && [ -w "$d" ] && [ -x "$d" ]; then
             printf '%s' "$d"
             return 0
         fi
