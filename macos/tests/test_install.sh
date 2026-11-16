@@ -89,6 +89,7 @@ ZIP=$MAC/build/DPIGate-macos.zip
 check "dist: make dist succeeds and writes the zip" '[ $rc = 0 ] && [ -f "$ZIP" ]'
 LIST=$(unzip -Z1 "$ZIP" 2>/dev/null)
 check "dist: zip has DPIGate-macos/install.sh, uninstall.sh and DPIGate.app" 'echo "$LIST" | grep -qx "DPIGate-macos/install.sh" && echo "$LIST" | grep -qx "DPIGate-macos/uninstall.sh" && echo "$LIST" | grep -q "^DPIGate-macos/DPIGate.app/Contents/MacOS/DPIGate\$"'
+check "dist: no AppleDouble (._) entries" '! echo "$LIST" | grep -q "\(^\|/\)\._"'
 check "dist: nothing outside DPIGate-macos/ (no __MACOSX)" '! echo "$LIST" | grep -v "^DPIGate-macos/" | grep -q .'
 check "dist: scripts in the zip are executable" 'unzip -Zv "$ZIP" DPIGate-macos/install.sh 2>/dev/null | grep -q "Unix file attributes.*755"'
 

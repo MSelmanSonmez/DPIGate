@@ -67,7 +67,7 @@ dist: app
 	ditto $(APP) $(BUILD)/dist/DPIGate-macos/DPIGate.app
 	cp install.sh uninstall.sh $(BUILD)/dist/DPIGate-macos/
 	chmod +x $(BUILD)/dist/DPIGate-macos/install.sh $(BUILD)/dist/DPIGate-macos/uninstall.sh
-	cd $(BUILD)/dist && ditto -c -k --keepParent DPIGate-macos ../DPIGate-macos.zip
+	cd $(BUILD)/dist && ditto -c -k --norsrc --noextattr --keepParent DPIGate-macos ../DPIGate-macos.zip
 	@rm -rf $(BUILD)/dist
 
 test: $(BUILD)/test_dns app
