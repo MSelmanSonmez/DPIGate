@@ -124,16 +124,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func nonEmpty(_ k: String) -> String? { if let s = env[k], !s.isEmpty { return s }; return nil }
     var scriptPath: String { nonEmpty("DPIGATE_APP_SCRIPT") ?? (Bundle.main.resourcePath ?? ".") + "/dpigate" }
-    var defaultLogPath: String { NSHomeDirectory() + "/Library/Logs/DPIGate/dpigate.log" }
+    /// HOME wins over the passwd entry, so a different HOME (tests) really moves every default path.
+    var home: String { nonEmpty("HOME") ?? NSHomeDirectory() }
+    var defaultLogPath: String { home + "/Library/Logs/DPIGate/dpigate.log" }
     var logPath: String { nonEmpty("DPIGATE_APP_LOG") ?? defaultLogPath }
-    var defaultStateDir: String { NSHomeDirectory() + "/Library/Application Support/DPIGate" }
+    var defaultStateDir: String { home + "/Library/Application Support/DPIGate" }
     var stateDir: String { nonEmpty("STATE_DIR") ?? defaultStateDir }
     var stateFile: String { stateDir + "/state" }
     var configDir: String { nonEmpty("DPIGATE_CONFIG_DIR") ?? stateDir + "/config" }
     var configFile: String { configDir + "/config" }
     var appsFile: String { configDir + "/apps.txt" }
     var sitesFile: String { configDir + "/sites.txt" }
-    var launchAgentsDir: String { nonEmpty("DPIGATE_LAUNCH_AGENTS_DIR") ?? NSHomeDirectory() + "/Library/LaunchAgents" }
+    var launchAgentsDir: String { nonEmpty("DPIGATE_LAUNCH_AGENTS_DIR") ?? home + "/Library/LaunchAgents" }
     var agentPath: String { launchAgentsDir + "/" + agentLabel + ".plist" }
     var port: String { nonEmpty("DPIGATE_PORT") ?? "1080" }
 
