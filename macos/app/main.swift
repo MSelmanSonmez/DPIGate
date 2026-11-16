@@ -241,6 +241,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         buildMenu()
         refreshUI()
         installSignalHandlers()
+        refreshAutostartPath()
 
         // A previous crash may have left proxy settings behind; undo them first.
         if FileManager.default.fileExists(atPath: stateFile) {
@@ -579,6 +580,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             if env["XPC_SERVICE_NAME"] != agentLabel { launchctl(["bootout", "gui/\(uid)/\(agentLabel)"]) }
         }
         return true
+    }
+
+    /// The agent stores the app's path; after the app was moved (build folder to ~/Applications) it is stale.
+    func refreshAutostartPath() {
+        guard FileManager.default.fileExists(atPath: agentPath),
+              let d = NSDictionary(contentsOfFile: agentPath),
+              let old = (d["ProgramArguments"] as? [String])?.first,
+              let exe = Bundle.main.executablePath, old != exe else { return }
+        log("app: Auto Start entry pointed to \(old), rewriting it")
+        setAutostart(true)
     }
 
     func launchctl(_ args: [String]) {

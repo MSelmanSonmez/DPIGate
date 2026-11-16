@@ -72,6 +72,26 @@ app_exit; rc=$?
 check "autostart-off: plist removed" '[ $rc = 0 ] && [ ! -e "$P" ]'
 check "launchctl bootout called" 'has_line "$A/launchctl.log" "^bootout gui/$UIDN/org.dpigate.menubar"'
 
+# (a2) Auto Start entry written for a moved app: the path is rewritten at launch; a current entry is left alone
+A2=$ROOT/a2; mkdir -p "$A2/LA"; fake_launchctl "$A2"; make_fake "$A2"
+P2=$A2/LA/org.dpigate.menubar.plist
+cat > "$P2" <<EOF2
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict><key>Label</key><string>org.dpigate.menubar</string><key>ProgramArguments</key><array><string>/old/place/DPIGate.app/Contents/MacOS/DPIGate</string></array><key>RunAtLoad</key><true/></dict></plist>
+EOF2
+app_env "$A2" DPIGATE_APP_SCRIPT="$A2/fake" DPIGATE_APP_ACTION=noop
+app_exit; rc=$?
+check "stale Auto Start path: rewritten to this app binary at launch" '[ $rc = 0 ] && [ "$(plutil -extract ProgramArguments.0 raw "$P2")" = "$APPBIN" ] && [ "$(plutil -extract EnvironmentVariables.DPIGATE_APP_AUTOSTART raw "$P2")" = 1 ]'
+touch -t 200001010000 "$P2"
+app_env "$A2" DPIGATE_APP_SCRIPT="$A2/fake" DPIGATE_APP_ACTION=noop
+app_exit
+check "current Auto Start entry: left untouched" '[ "$(stat -f %Sm -t %Y "$P2")" = 2000 ]'
+rm -f "$P2"
+app_env "$A2" DPIGATE_APP_SCRIPT="$A2/fake" DPIGATE_APP_ACTION=noop
+app_exit
+check "no Auto Start entry: none is created" '[ ! -e "$P2" ]'
+
 # (e) apps.txt is created on first launch with Discord; the app is left in place when edited
 check "apps.txt created with Discord" '[ "$(cat "$A/AppSupport/DPIGate/config/apps.txt")" = "/Applications/Discord.app" ]'
 
