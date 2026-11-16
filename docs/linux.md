@@ -198,7 +198,7 @@ done: no `~/.local/share/DPIGate`, no systemd unit, no autostart entry, no menu 
   flag, so traffic keeps flowing) or a reboot.
 - **Settings** (ProgramFilters, the DNS and "Bypass All Traffic" choices) are in
   `<AppImage file name>.config/` next to the AppImage, for example
-  `dpigate-1.0.1-x86_64.AppImage.config/`. If that folder cannot be created or written
+  `dpigate-1.1.0-x86_64.AppImage.config/`. If that folder cannot be created or written
   (read-only or removable media) the settings are kept in `~/.config/DPIGate` instead,
   and AppRun says so. To start over, delete the folder.
   The AppImage runtime treats a folder named `<AppImage file name>.config` next to the
