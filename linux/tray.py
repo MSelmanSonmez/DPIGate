@@ -142,6 +142,12 @@ GDPI_DNS_LABEL = os.environ.get("GDPI_DNS_LABEL", "DNS")
 GDPI_DNS_CURRENT = _env_int("GDPI_DNS_CURRENT", -1)
 GDPI_DNS_INFO  = os.environ.get("GDPI_DNS_INFO", "")
 GDPI_BYPASS_ALL = os.environ.get("GDPI_BYPASS_ALL", "") == "1"
+# Run-without-installing mode (AppImage). The engine and the firewall belong to
+# a root helper that watches THIS process: when the tray exits, however it
+# exits, the helper tears everything down. So the tray never runs kill.sh, has
+# no Auto Start / Uninstall (nothing is installed), and cannot restart the
+# engine, so settings that need a restart apply at the next start.
+GDPI_PORTABLE = os.environ.get("GDPI_PORTABLE", "") == "1"
 
 # ── Settings persistence (KEY=VALUE file in ~/.config/DPIGate) ─────
 # The tray is the only writer: every menu toggle lands here, and start.sh /
@@ -396,6 +402,10 @@ def kill_goodbyedpi(noprompt=False):
     be able to cancel.
 
     Returns True on success, False on failure INCLUDING a cancelled dialog."""
+    if GDPI_PORTABLE:
+        # The root helper unloads the rules and stops the engine when this
+        # process ends; no second password prompt, nothing to run here.
+        return True
     if os.path.exists(KILL_SH):
         env = os.environ.copy()
         if noprompt:
@@ -712,12 +722,20 @@ def on_dns_selected(item, index):
     # out-of-range value degrades to auto-detect inside dns_detect.py.
     # Armed for undo first: if the restart never lands, the write is rolled
     # back so a cancelled click cannot apply itself at the next boot.
+    if GDPI_PORTABLE:
+        _save_setting("FORCE_DNS_INDEX", index)
+        show_notify("DNS choice saved - it applies the next time DPIGate is started")
+        return
     _arm_revert("FORCE_DNS_INDEX", _load_settings().get("FORCE_DNS_INDEX", "-1"))
     _save_setting("FORCE_DNS_INDEX", index)
     restart_start_sh(force_dns_index=index)
 
 
 def on_dns_autodetect(item):
+    if GDPI_PORTABLE:
+        _save_setting("FORCE_DNS_INDEX", -1)
+        show_notify("DNS auto-detect saved - it applies the next time DPIGate is started")
+        return
     _arm_revert("FORCE_DNS_INDEX", _load_settings().get("FORCE_DNS_INDEX", "-1"))
     _save_setting("FORCE_DNS_INDEX", -1)
     restart_start_sh(force_dns_index=-1)
@@ -818,6 +836,10 @@ def on_autostart_toggle(item):
 def on_bypass_all_toggle(item):
     """Toggle between per-program filtering and bypass-all-traffic mode."""
     active = item.get_active()
+    if GDPI_PORTABLE:
+        _save_setting("BYPASS_ALL", "1" if active else "0")
+        show_notify("Bypass mode saved - it applies the next time DPIGate is started")
+        return
     # Persist FIRST: if the machine loses power between here and the daemon
     # coming up, the user's choice must still be there on the next start.
     # _arm_revert covers the other branch: a restart that never lands (the
@@ -916,7 +938,8 @@ def check_alive():
     # cost low; this is the only mechanism that survives a ruleset flush
     # from outside DPIGate.
     _watchdog_tick += 1
-    if _watchdog_tick % 15 == 0:
+    if _watchdog_tick % 15 == 0 and not GDPI_PORTABLE:
+        # (portable mode: the root helper reloads the rules itself)
         rc, _out = _plat("fw-is-loaded", noprompt=True)
         if rc == 1 and _plat("fw-load", noprompt=True)[0] == 0:
             show_notify("Firewall rules reloaded")
@@ -968,19 +991,22 @@ def build_menu():
 
     menu.append(Gtk.SeparatorMenuItem())
 
-    status = verify_autostart()
-    autostart = Gtk.CheckMenuItem(label=status['detail'])
-    autostart.set_active(status['active'])
-    autostart.connect("activate", on_autostart_toggle)
-    menu.append(autostart)
+    if not GDPI_PORTABLE:
+        # Nothing is installed in run-without-installing mode, so there is no
+        # login entry to toggle and nothing to uninstall.
+        status = verify_autostart()
+        autostart = Gtk.CheckMenuItem(label=status['detail'])
+        autostart.set_active(status['active'])
+        autostart.connect("activate", on_autostart_toggle)
+        menu.append(autostart)
 
-    menu.append(Gtk.SeparatorMenuItem())
+        menu.append(Gtk.SeparatorMenuItem())
 
-    uninstall_item = Gtk.MenuItem(label="Uninstall")
-    uninstall_item.connect("activate", on_uninstall)
-    menu.append(uninstall_item)
+        uninstall_item = Gtk.MenuItem(label="Uninstall")
+        uninstall_item.connect("activate", on_uninstall)
+        menu.append(uninstall_item)
 
-    menu.append(Gtk.SeparatorMenuItem())
+        menu.append(Gtk.SeparatorMenuItem())
     exit_item = Gtk.MenuItem(label="Exit")
     exit_item.connect("activate", on_exit)
     menu.append(exit_item)
