@@ -81,11 +81,22 @@ To remove it: tray icon → **Uninstall**, or **Settings → Apps & features**.
 
 ### Linux
 
-There is no prebuilt package — the binary is compiled on your machine, so start
-by getting the sources (an AppImage can also be built from them with
-`linux/packaging/appimage/build-appimage.sh`. It either installs DPIGate or runs it
-**without installing** — one password prompt, nothing left behind, settings next to the
-AppImage; see the [Linux guide](docs/linux.md#appimage)):
+**AppImage (easiest).** Download `dpigate-<version>-x86_64.AppImage` from the
+[latest release](../../releases/latest), make it executable and open it:
+
+```bash
+chmod +x dpigate-*-x86_64.AppImage
+./dpigate-*-x86_64.AppImage
+```
+
+It asks whether to **install** DPIGate (menu entry, tray, optional start at
+login; uninstall from the tray menu) or to **run it without installing** (one
+password prompt, nothing left behind, settings kept next to the AppImage).
+Missing runtime packages are installed with your package manager; no compiler
+is needed. Details: [Linux guide](docs/linux.md#appimage).
+
+**From source.** The installer below compiles the engine on your machine.
+Clone the repository:
 
 ```bash
 git clone https://github.com/MSelmanSonmez/DPIGate.git
@@ -151,7 +162,7 @@ There is no Bypass All or Program Filters item on macOS: what gets the bypass is
 
 ### Install
 
-Unpack the release zip and run the installer; it copies the app to `~/Applications` (no admin rights):
+Download `DPIGate-macos.zip` from the [latest release](../../releases/latest), unpack it and run the installer; it copies the app to `~/Applications` (no admin rights):
 
 ```sh
 cd DPIGate-macos
