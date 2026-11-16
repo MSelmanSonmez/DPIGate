@@ -495,7 +495,7 @@ portable_failed() {
 }
 
 portable_main() {
-    local uid cfg tarsum nonce rd_candidates c state="" esc_pid="" rc=0 waited=0
+    local uid cfg tarball tarsum nonce rd_candidates c state="" esc_pid="" rc=0 waited=0
     local roles="$NEED_PORTABLE_ROLES"
     uid="$(id -u)"
 
@@ -525,7 +525,8 @@ portable_main() {
     # AppImage mount. Root copies the tarball into its own directory and refuses
     # to run it unless the copy still has this checksum (see portable-bootstrap.sh).
     tar -C "$HERE" -cf "$STAGE/payload.tar" . || die "cannot pack the payload"
-    tarsum="$(sha256sum "$STAGE/payload.tar" | cut -d' ' -f1)"
+    tarball="$(readlink -f -- "$STAGE/payload.tar")"   # the bootstrap wants the canonical name
+    tarsum="$(sha256sum "$tarball" | cut -d' ' -f1)"
     [ -n "$tarsum" ] || die "cannot compute the payload checksum"
     nonce="$$.$RANDOM$RANDOM"
 
@@ -543,8 +544,10 @@ portable_main() {
     [ "$rc" -eq 0 ] || die "no way to become root (sudo, doas, pkexec and run0 are all unusable)"
 
     say "starting the engine${roles:+ (installing packages: $roles)}; this can take a while..."
-    ( plat_run_root bash -c "$(cat "$HERE/portable-bootstrap.sh")" dpigate-boot \
-          "$uid" "$$" "$STAGE/payload.tar" "$tarsum" "$roles" "$cfg" "$nonce" ) </dev/null >/dev/null 2>&1 &
+    # /bin/bash by absolute path: the program root is asked to run is not looked up in
+    # a PATH the user controls (pkexec and doas want an absolute path anyway).
+    ( plat_run_root /bin/bash -c "$(cat "$HERE/portable-bootstrap.sh")" dpigate-boot \
+          "$uid" "$$" "$tarball" "$tarsum" "$roles" "$cfg" "$nonce" ) </dev/null >/dev/null 2>&1 &
     esc_pid=$!
 
     rd_candidates="${DPIGATE_TEST_BASE:+$DPIGATE_TEST_BASE/$uid/data/state} /run/dpigate/$uid/data/state /dev/shm/dpigate/$uid/data/state"

@@ -70,8 +70,16 @@ if [ "$IS_ROOT" -eq 1 ]; then
 fi
 gid="$(id -g "$uid" 2>/dev/null)" || fail 16 "no such user"
 case "$gid" in ''|*[!0-9]*) fail 16 "no such user" ;; esac
-[ -f "$tarball" ] && [ ! -L "$tarball" ] || fail 16 "payload tarball is not a regular file"
-[ "$(stat -c %u "$tarball" 2>/dev/null)" = "$uid" ] || fail 16 "payload tarball is not owned by uid $uid"
+# Open the tarball ONCE and judge and copy that open file, never the path again:
+# a check on the path followed by a second open is a race (the user may swap the
+# path for a symlink in between), and a symlink in a PARENT directory is not
+# caught by testing the last component. The kernel's own name for an open file
+# never contains a symlink, so it must equal the path we were given.
+{ exec 9< "$tarball"; } 2>/dev/null || fail 16 "cannot open the payload tarball"
+[ "$(readlink "/proc/$$/fd/9" 2>/dev/null)" = "$tarball" ] \
+    || fail 16 "payload tarball path is not canonical (a symlink in it, or '..')"
+[ -f "/proc/$$/fd/9" ] || fail 16 "payload tarball is not a regular file"
+[ "$(stat -L -c %u "/proc/$$/fd/9" 2>/dev/null)" = "$uid" ] || fail 16 "payload tarball is not owned by uid $uid"
 
 # ── run directory: root-owned, created fresh, parent root-owned ─────────────
 if [ "$IS_ROOT" -eq 1 ]; then
@@ -130,8 +138,9 @@ abort() { rm -rf -- "$RD"; fail "$1" "$2"; }
 
 # ── copy first, then verify THE COPY, then extract the copy ─────────────────
 # At most 32 MiB: /run is memory.
-head -c 33554433 -- "$tarball" > "$RD/payload.tar" 2>/dev/null \
+( umask 077; head -c 33554433 <&9 > "$RD/payload.tar" ) 2>/dev/null \
     || abort 16 "cannot read the payload tarball"
+exec 9<&-
 [ "$(stat -c %s "$RD/payload.tar")" -le 33554432 ] || abort 16 "payload tarball is too large"
 have="$(sha256sum "$RD/payload.tar" 2>/dev/null | cut -d' ' -f1)"
 if [ "$have" != "$want" ]; then
