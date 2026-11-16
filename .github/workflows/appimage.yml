@@ -1,0 +1,57 @@
+name: Build AppImage
+
+# Manual only. It produces the AppImage as a workflow artifact and does not
+# publish a release. Pin APPIMAGETOOL_SHA256 below before the first run: the
+# job refuses to run an unverified appimagetool.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  APPIMAGETOOL_URL: https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
+  APPIMAGETOOL_SHA256: ""
+
+jobs:
+  appimage:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo DEBIAN_FRONTEND=noninteractive apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            build-essential pkg-config \
+            libnetfilter-queue-dev libnfnetlink-dev libmnl-dev
+
+      - name: Read version
+        id: version
+        run: |
+          v="$(sed -n 's/^#define[[:space:]]\{1,\}DPIGATE_VERSION[[:space:]]\{1,\}"\([^"]*\)".*/\1/p' linux/goodbyedpi.c | head -n 1)"
+          test -n "$v" || { echo "::error::cannot read DPIGATE_VERSION"; exit 1; }
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+
+      - name: Fetch appimagetool (verified)
+        run: |
+          test -n "$APPIMAGETOOL_SHA256" || { echo "::error::APPIMAGETOOL_SHA256 is not pinned yet"; exit 1; }
+          wget -q -O "$RUNNER_TEMP/appimagetool" "$APPIMAGETOOL_URL"
+          echo "$APPIMAGETOOL_SHA256  $RUNNER_TEMP/appimagetool" | sha256sum -c -
+          chmod 0755 "$RUNNER_TEMP/appimagetool"
+          echo "APPIMAGETOOL=$RUNNER_TEMP/appimagetool" >> "$GITHUB_ENV"
+
+      - name: Build AppImage
+        env:
+          # appimagetool runs without FUSE on the runner.
+          APPIMAGE_EXTRACT_AND_RUN: "1"
+        run: linux/packaging/appimage/build-appimage.sh dist
+
+      - name: Upload AppImage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dpigate-${{ steps.version.outputs.version }}-x86_64.AppImage
+          path: dist/dpigate-${{ steps.version.outputs.version }}-x86_64.AppImage
+          if-no-files-found: error
