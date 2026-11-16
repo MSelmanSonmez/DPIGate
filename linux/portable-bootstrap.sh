@@ -1,6 +1,6 @@
 # portable-bootstrap.sh — the ONLY text that runs as root before DPIGate's own
 # files are trusted. It is NOT executed from a file: AppRun reads it and passes
-# it to `plat_run_root bash -c "$(cat portable-bootstrap.sh)" dpigate-boot ARGS`,
+# it to `plat_run_root /bin/bash -c "$(cat portable-bootstrap.sh)" dpigate-boot ARGS`,
 # so no file the user can write is ever run by root.
 #
 # Arguments (all validated below):
@@ -160,4 +160,4 @@ chmod -R go-w "$RD/app"
 [ -f "$RD/app/goodbyedpi" ] && chmod 0700 "$RD/app/goodbyedpi"
 
 cd / || exit 1
-exec bash --noprofile --norc "$RD/app/portable-root.sh" "$uid" "$gid" "$watch" "$roles" "$usercfg" "$RD" "$nonce" </dev/null
+exec "$BASH" --noprofile --norc "$RD/app/portable-root.sh" "$uid" "$gid" "$watch" "$roles" "$usercfg" "$RD" "$nonce" </dev/null

@@ -49,7 +49,7 @@ teardown() {
     # it when this session may have started something (an installed engine that
     # was never ours must survive a failed start of this one).
     if [ "$STARTED" -eq 1 ]; then
-        PLAT_NOPROMPT=1 bash "$APP/kill.sh" >>"$DATA/helper.log" 2>&1
+        PLAT_NOPROMPT=1 "$BASH" "$APP/kill.sh" >>"$DATA/helper.log" 2>&1
     fi
     cd / && rm -rf -- "$RD"
     return 0
@@ -134,7 +134,7 @@ kill -0 "$watch" 2>/dev/null || die 14 "the tray (pid $watch) is already gone"
 
 # --restart: take over a stale engine or rule set instead of "already running".
 STARTED=1
-bash "$APP/start.sh" --no-tray --restart || die 14 "start.sh failed (see $DATA/helper.log)"
+"$BASH" "$APP/start.sh" --no-tray --restart || die 14 "start.sh failed (see $DATA/helper.log)"
 
 gpid="$(cat "$DATA/goodbyedpi.pid" 2>/dev/null)"
 case "$gpid" in ''|*[!0-9]*) die 14 "the engine left no PID file" ;; esac
@@ -143,7 +143,7 @@ write_state "ready $gpid $nonce"
 
 # ── watch ───────────────────────────────────────────────────────────────────
 # reaper.sh returns only after the tray is gone (and then runs kill.sh itself).
-bash "$APP/reaper.sh" "$watch" &
+"$BASH" "$APP/reaper.sh" "$watch" &
 REAPER_PID=$!
 
 tick=0
