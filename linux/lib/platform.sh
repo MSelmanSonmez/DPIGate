@@ -138,11 +138,27 @@ _plat_dnf_enable_el_repos() {
 }
 
 
-# plat_deps_install ROLE   ROLE = build|runtime|all
+# _plat_nfq_req_for MGR -> the runtime (non-development) packages of the three
+# libraries the daemon links against: libnetfilter_queue, libnfnetlink, libmnl.
+# Empty when the manager's runtime names are not defined here; the caller then
+# reports the gap instead of guessing a name.
+_plat_nfq_req_for() {
+    case "$1" in
+        pacman)  echo "libnetfilter_queue libnfnetlink libmnl" ;;
+        apt)     echo "libnetfilter-queue1 libnfnetlink0 libmnl0" ;;
+        dnf|yum) echo "libnetfilter_queue libnfnetlink libmnl" ;;
+        *)       echo "" ;;
+    esac
+}
+
+# plat_deps_install ROLE   ROLE = build|runtime|all|nfq|tray
+#   nfq  - only the runtime libraries of _plat_nfq_req_for (no compiler, no -dev)
+#   tray - only the tray packages (run_opt): python3-gi, GTK 3, AyatanaAppIndicator3
 plat_deps_install() {
     local role="${1:-all}"
     local mgr; mgr="$(plat_pkgmgr)"
     local build_req="" run_req="" run_opt="" pre="" rc=0
+    local nfq_req; nfq_req="$(_plat_nfq_req_for "$mgr")"
 
     case "$mgr" in
         apt)
@@ -215,6 +231,8 @@ plat_deps_install() {
     case "$role" in
         build)   pkgs="$build_req" ;;
         runtime) pkgs="$run_req" ;;
+        nfq)     pkgs="$nfq_req" ;;
+        tray)    pkgs="" ;;     # tray packages are installed one by one below
         *)       pkgs="$build_req $run_req" ;;
     esac
 
@@ -247,7 +265,7 @@ plat_deps_install() {
         fi
     fi
 
-    if [ "$role" != "build" ]; then
+    if [ "$role" != "build" ] && [ "$role" != "nfq" ]; then
         local p
         for p in $run_opt; do
             rc=0
@@ -259,9 +277,11 @@ plat_deps_install() {
     # Report the CAPABILITY outcome, not the package-manager exit code: a
     # transaction can "succeed" while the compiler is still missing, and it
     # can fail on one optional name while everything required got installed.
-    if [ "$role" = "runtime" ]; then
-        return 0
-    fi
+    # nfq and tray roles are checked by the caller (AppRun), which knows which
+    # libraries and typelibs it needs; a compiler check would be wrong there.
+    case "$role" in
+        runtime|nfq|tray) return 0 ;;
+    esac
     if plat_deps_check >/dev/null; then
         return 0
     fi
