@@ -9,13 +9,17 @@
 # and the tray is started. Later launches of the same version only start the
 # tray.
 #
-# The AppImage does not contain libnetfilter_queue, libnfnetlink or libmnl.
-# The daemon needs them from the host's runtime packages. Before anything is
-# copied or installed, AppRun checks that they are present and, if not, names
-# the packages and exits with status 1. It never installs anything itself.
+# The AppImage does not contain libnetfilter_queue, libnfnetlink or libmnl, and
+# it does not contain the tray's GTK / AyatanaAppIndicator stack. Before
+# anything is copied or installed, AppRun checks for them and, if they are
+# missing, installs the runtime packages through linux/lib/platform.sh's
+# plat_deps_install (the distribution's package manager, one password prompt).
+# The libraries are required: if they cannot be installed AppRun names the
+# packages and exits 1. The tray is optional: if its packages cannot be
+# installed, the install continues and a warning is printed.
 #
 # Usage:
-#   AppRun                      first run: copy + install; later: start the tray
+#   AppRun                      first run: check, copy + install; later: start the tray
 #   AppRun --install [flags]    copy and install again; flags go to install.sh
 #   AppRun --uninstall          run the installed uninstall.sh
 #   AppRun --help
@@ -23,10 +27,11 @@
 # Any flag this script does not know is passed to install.sh, and passing one
 # implies an install step, e.g. --system --start --autostart --no-autostart
 # --no-shortcut --assume-deps --gui --cli --check-only.
+# --assume-deps: do not install packages; missing libraries are still an error.
 # --no-tray skips starting the tray. --check-only never starts the tray and
-# skips the runtime-library check.
+# skips the dependency step.
 # --dry-run (for testing) copies the payload but only prints the install and
-# tray steps instead of running them. The runtime-library check still runs.
+# tray steps. It never installs packages; the library check still runs.
 #
 # Never run as root: install.sh and the tray must run as the user, and
 # install.sh asks for root itself when it needs it.
@@ -41,6 +46,20 @@ VERSION="$(cat "$HERE/VERSION" 2>/dev/null || true)"
 # Shared objects the daemon links against, by SONAME, from the host.
 RUNTIME_LIBS="libnetfilter_queue.so.1 libnfnetlink.so.0 libmnl.so.0"
 
+# tray.py tries AyatanaAppIndicator3 0.1, then AppIndicator3 0.1, and needs
+# GTK 3.0. This probe checks the same typelibs; exit 0 when the tray can load.
+TRAY_PROBE='import gi, importlib, sys
+gi.require_version("Gtk", "3.0")
+importlib.import_module("gi.repository.Gtk")
+for name in ("AyatanaAppIndicator3", "AppIndicator3"):
+    try:
+        gi.require_version(name, "0.1")
+        importlib.import_module("gi.repository." + name)
+        sys.exit(0)
+    except (ImportError, ValueError):
+        pass
+sys.exit(1)'
+
 say() { printf '[AppRun] %s\n' "$*" >&2; }
 die() { say "ERROR: $*"; exit 1; }
 
@@ -49,13 +68,17 @@ usage() {
 DPIGate AppImage
 
 Usage:
-  AppRun                      first run: copy and install; later runs: start the tray
+  AppRun                      first run: check, copy and install; later runs: start the tray
   AppRun --install [flags]    copy and install again; flags are passed to install.sh
   AppRun --uninstall          remove DPIGate (runs the installed uninstall.sh)
   AppRun --help               show this help
 
-Requires the runtime packages of libnetfilter_queue, libnfnetlink and libmnl on
-this machine (not the -dev packages). The AppImage does not include them.
+Runtime packages: libnetfilter_queue, libnfnetlink and libmnl are required and
+are installed with the package manager if missing (one password prompt). The
+tray packages (python3 with GTK 3 and AyatanaAppIndicator3 or AppIndicator3)
+are installed too; if that fails the bypass still installs, without the icon.
+The compiler and -dev packages are never installed. Use --assume-deps to skip
+installing packages; then missing libraries are reported and AppRun exits 1.
 
 install.sh flags (passed through):
   --system        install as a root/system service (systemd, OpenRC or runit)
@@ -63,7 +86,7 @@ install.sh flags (passed through):
   --autostart     start the tray (and the bypass) at login
   --no-autostart  remove any login autostart entry
   --no-shortcut   do not create the application-menu entry
-  --assume-deps   skip dependency probing and auto-install
+  --assume-deps   do not install packages (see above)
   --gui / --cli   force the graphical wizard or the text installer
   --check-only    probe the system only; installs nothing
 
@@ -71,8 +94,8 @@ AppRun flags:
   --no-tray       do not start the tray after the install step
   --dry-run       testing: copy the payload, print the install and tray steps only
 
-The AppImage never runs as root. install.sh uses sudo, doas, pkexec or run0
-itself when it needs root.
+The AppImage never runs as root. install.sh and AppRun use sudo, doas, pkexec
+or run0 themselves when they need root.
 EOF
 }
 
@@ -83,6 +106,7 @@ DO_UNINSTALL=0
 NO_TRAY=0
 DRY_RUN=0
 CHECK_ONLY=0
+ASSUME_DEPS=0
 INSTALL_ARGS=()
 for arg in "$@"; do
     case "$arg" in
@@ -92,6 +116,7 @@ for arg in "$@"; do
         --no-tray)   NO_TRAY=1 ;;
         --dry-run)   DRY_RUN=1 ;;
         --no-build)  ;;   # implied: the AppImage ships a prebuilt binary
+        --assume-deps) ASSUME_DEPS=1; INSTALL_ARGS+=("$arg") ;;
         --check-only) CHECK_ONLY=1; NO_TRAY=1; INSTALL_ARGS+=("$arg") ;;
         *)           INSTALL_ARGS+=("$arg") ;;
     esac
@@ -130,22 +155,12 @@ if [ "${#INSTALL_ARGS[@]}" -gt 0 ]; then
     MODE_INSTALL=1
 fi
 
-# ── Runtime libraries from the host ─────────────────────────────────────────
-# Package names for the distribution, from linux/lib/platform.sh. Sourced in a
-# subshell so its settings cannot leak into this script (set -u).
-runtime_pkgs() {
-    local mgr
-    mgr="$( ( set +eu; . "$HERE/lib/platform.sh" >/dev/null 2>&1 && plat_pkgmgr ) 2>/dev/null || true )"
-    case "$mgr" in
-        pacman)  echo "libnetfilter_queue libnfnetlink libmnl" ;;
-        apt)     echo "libnetfilter-queue1 libnfnetlink0 libmnl0" ;;
-        dnf|yum) echo "libnetfilter_queue libnfnetlink libmnl" ;;
-        *)       echo "" ;;
-    esac
-}
+# ── Runtime dependencies ────────────────────────────────────────────────────
+# Missing NFQ libraries: a required dependency. Missing tray: optional.
 
-check_runtime_libs() {
-    local ldconfig_bin missing="" so cache pkgs
+# Prints the sonames from RUNTIME_LIBS that ldconfig does not list.
+nfq_missing() {
+    local ldconfig_bin cache so missing=""
     ldconfig_bin="$(command -v ldconfig 2>/dev/null || true)"
     [ -n "$ldconfig_bin" ] || ldconfig_bin=/sbin/ldconfig
     [ -x "$ldconfig_bin" ] || die "cannot find ldconfig; cannot check the runtime libraries"
@@ -155,22 +170,98 @@ check_runtime_libs() {
             missing="$missing $so"
         fi
     done
-    if [ -n "$missing" ]; then
-        pkgs="$(runtime_pkgs)"
-        say "ERROR: runtime libraries missing on this system:$missing"
-        if [ -n "$pkgs" ]; then
-            say "Install the runtime packages ($pkgs), then run AppRun again."
-        else
-            say "Install the runtime packages of libnetfilter_queue, libnfnetlink and libmnl"
-            say "(not the -dev packages), then run AppRun again."
-        fi
-        exit 1
-    fi
+    printf '%s' "$missing"
 }
 
-# --check-only, --help and --uninstall do not need the libraries.
+# Runtime package names for this distribution (from platform.sh's table).
+nfq_packages() {
+    ( set +eu; . "$HERE/lib/platform.sh" >/dev/null 2>&1 && _plat_nfq_req_for "$(plat_pkgmgr)" ) 2>/dev/null || true
+}
+
+# Names the packages, then exits 1. $1 = missing sonames.
+report_nfq_missing() {
+    local pkgs
+    pkgs="$(nfq_packages)"
+    say "ERROR: runtime libraries missing:$1"
+    if [ -n "$pkgs" ]; then
+        say "Install these runtime packages, then run AppRun again: $pkgs"
+    else
+        say "Install the runtime packages of libnetfilter_queue, libnfnetlink and libmnl"
+        say "(not the -dev packages) for this distribution, then run AppRun again."
+    fi
+    exit 1
+}
+
+tray_ready() {
+    command -v python3 >/dev/null 2>&1 && python3 -I -c "$TRAY_PROBE" >/dev/null 2>&1
+}
+
+# plat_deps_install through platform.sh, in a subshell so its settings (set -u
+# is not compatible with it) cannot leak into this script. $1 = role (nfq|tray).
+# rc 0 ok; rc 2 the user declined the password prompt; other rc = failed.
+platform_install() {
+    local rc=0
+    ( set +eu
+      . "$HERE/lib/platform.sh" || exit 1
+      PLAT_DEPS_RUNTIME_ONLY=1
+      plat_root_acquire || exit $?
+      plat_deps_install "$1" ) || rc=$?
+    return "$rc"
+}
+
+check_runtime_deps() {
+    local missing rc pkgs
+    missing="$(nfq_missing)"
+    if [ -n "$missing" ]; then
+        pkgs="$(nfq_packages)"
+        if [ "$DRY_RUN" -eq 1 ]; then
+            say "would install the runtime packages: ${pkgs:-(not defined for this distribution)}"
+            report_nfq_missing "$missing"
+        fi
+        if [ "$ASSUME_DEPS" -eq 1 ]; then
+            say "--assume-deps: not installing packages"
+            report_nfq_missing "$missing"
+        fi
+        say "runtime libraries missing:$missing; installing through the package manager"
+        rc=0
+        platform_install nfq || rc=$?
+        if [ "$rc" -eq 2 ]; then
+            say "package installation was declined; nothing was installed"
+            report_nfq_missing "$missing"
+        fi
+        if [ "$rc" -ne 0 ]; then
+            say "package installation failed (rc=$rc)"
+        fi
+        missing="$(nfq_missing)"
+        if [ -n "$missing" ]; then
+            report_nfq_missing "$missing"
+        fi
+        say "runtime libraries installed"
+    fi
+
+    if tray_ready; then
+        return 0
+    fi
+    if [ "$DRY_RUN" -eq 1 ]; then
+        say "would install the tray packages (python3 GTK 3 and AyatanaAppIndicator3 or AppIndicator3)"
+        return 0
+    fi
+    if [ "$ASSUME_DEPS" -eq 0 ]; then
+        say "tray packages missing; installing through the package manager"
+        rc=0
+        platform_install tray || rc=$?
+        [ "$rc" -eq 0 ] || say "tray package installation did not complete (rc=$rc)"
+    fi
+    if ! tray_ready; then
+        say "WARNING: the tray is not available. It needs python3 with PyGObject and GTK 3,"
+        say "         plus AyatanaAppIndicator3 or AppIndicator3. The bypass is installed"
+        say "         without the tray icon; install those packages and run AppRun again."
+    fi
+    return 0
+}
+
 if [ "$CHECK_ONLY" -eq 0 ]; then
-    check_runtime_libs
+    check_runtime_deps
 fi
 
 # ── Step 1: copy the payload out of the (read-only) AppImage mount ──────────
