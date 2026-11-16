@@ -168,7 +168,8 @@ for root through `sudo`, `doas`, `pkexec` or `run0` when it needs it; this inclu
 the tray. Later launches of the same version only start the tray. A newer AppImage
 copies and installs its own version; the older `<version>/` folders are not removed
 automatically. Right-click the tray icon and choose Uninstall, run `--uninstall`, or run
-`~/.local/share/DPIGate/uninstall.sh` to remove it.
+`~/.local/share/DPIGate/uninstall.sh` to remove it. A running DPIGate tray blocks a new
+start (including a reinstall with `--install`): choose Exit in the tray first.
 
 #### Run without installing
 
