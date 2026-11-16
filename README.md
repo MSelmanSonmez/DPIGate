@@ -190,7 +190,7 @@ macos/dpigate restore    # put the saved settings back after a crash or kill -9
 macos/dpigate status     # proxy state and current proxy/DNS settings
 ```
 
-`make -C macos` builds only the proxy (`macos/build/dpigate-proxy`); `make -C macos dist` builds the release zip `macos/build/DPIGate-macos.zip`. `make -C macos test` runs all tests (fake script and tools; they touch no system setting).
+`make -C macos` builds only the proxy (`macos/build/dpigate-proxy`); `make -C macos dist` builds the release zip `macos/build/DPIGate-macos.zip`. `make -C macos test` runs all tests (fake script and tools; they touch no system setting). `make -C macos fuzz` runs a short ASan/UBSan fuzz of the DNS parser (about 10 seconds; CI runs it separately).
 
 The proxy speaks SOCKS5 and HTTP CONNECT on the same port. `run` points the system SOCKS, web and secure web proxies at it and sets `HTTPS_PROXY`/`HTTP_PROXY` with `launchctl setenv`, so apps that ignore the system proxy (Discord's updater) are covered when started normally, e.g. from the Dock. Environment variables only reach apps launched afterwards: restart Discord after starting dpigate.
 

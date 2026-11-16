@@ -36,6 +36,9 @@ jobs:
       - name: Run the tests
         run: make -C macos test
 
+      - name: Fuzz the DNS parser (ASan + UBSan)
+        run: make -C macos fuzz
+
       - name: Build the release zip
         run: make -C macos dist
 

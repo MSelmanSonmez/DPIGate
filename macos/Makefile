@@ -25,12 +25,20 @@ $(TARGET): $(foreach a,$(ARCHS),$(BUILD)/dpigate-proxy-$(a))
 
 clean:
 	rm -rf $(BUILD)/DPIGate.app $(BUILD)/app $(BUILD)/dist $(BUILD)/DPIGate-macos.zip
-	rm -f $(BUILD)/test_dns $(TARGET) $(foreach a,$(ARCHS),$(BUILD)/dpigate-proxy-$(a) $(patsubst %.c,$(BUILD)/$(a)/%.o,$(SRC)))
+	rm -f $(BUILD)/test_dns $(BUILD)/fuzz_dns $(TARGET) $(foreach a,$(ARCHS),$(BUILD)/dpigate-proxy-$(a) $(patsubst %.c,$(BUILD)/$(a)/%.o,$(SRC)))
 	-rmdir $(foreach a,$(ARCHS),$(BUILD)/$(a)) $(BUILD) 2>/dev/null
 
 $(BUILD)/test_dns: tests/test_dns.c $(SRCDIR)/dns_resolver.c $(SRCDIR)/dns_resolver.h
 	@mkdir -p $(BUILD)
 	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ tests/test_dns.c $(SRCDIR)/dns_resolver.c
+
+# DNS parser fuzz run (ASan + UBSan). Not part of "test": it takes ~10 s; CI calls it separately.
+$(BUILD)/fuzz_dns: tests/fuzz_dns.c $(SRCDIR)/dns_resolver.c $(SRCDIR)/dns_resolver.h
+	@mkdir -p $(BUILD)
+	$(CC) $(CPPFLAGS) -fsanitize=address,undefined -fno-sanitize-recover=undefined -g -O1 -I$(SRCDIR) -o $@ tests/fuzz_dns.c $(SRCDIR)/dns_resolver.c
+
+fuzz: $(BUILD)/fuzz_dns
+	$(BUILD)/fuzz_dns 2000000 1
 
 # Menu bar app: build/DPIGate.app (universal Swift binary + script + proxy, ad-hoc signed).
 # Separate from "all" because it needs swiftc (Command Line Tools are enough).
@@ -77,4 +85,4 @@ test: $(BUILD)/test_dns app
 	@/bin/bash tests/test_app_menu.sh
 	@/bin/bash tests/test_install.sh
 
-.PHONY: all clean test app dist
+.PHONY: all clean test app dist fuzz
