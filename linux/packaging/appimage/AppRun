@@ -6,9 +6,13 @@
 # out of the mount to
 #     ${XDG_DATA_HOME:-~/.local/share}/DPIGate/<version>/
 # install.sh is run from that copy with --no-build (the binary is prebuilt),
-# then the bundled shared libraries are copied next to the installed daemon,
 # and the tray is started. Later launches of the same version only start the
 # tray.
+#
+# The AppImage does not contain libnetfilter_queue, libnfnetlink or libmnl.
+# The daemon needs them from the host's runtime packages. Before anything is
+# copied or installed, AppRun checks that they are present and, if not, names
+# the packages and exits with status 1. It never installs anything itself.
 #
 # Usage:
 #   AppRun                      first run: copy + install; later: start the tray
@@ -19,9 +23,10 @@
 # Any flag this script does not know is passed to install.sh, and passing one
 # implies an install step, e.g. --system --start --autostart --no-autostart
 # --no-shortcut --assume-deps --gui --cli --check-only.
-# --no-tray skips starting the tray. --check-only never starts the tray.
+# --no-tray skips starting the tray. --check-only never starts the tray and
+# skips the runtime-library check.
 # --dry-run (for testing) copies the payload but only prints the install and
-# tray steps instead of running them.
+# tray steps instead of running them. The runtime-library check still runs.
 #
 # Never run as root: install.sh and the tray must run as the user, and
 # install.sh asks for root itself when it needs it.
@@ -32,6 +37,9 @@ APP_NAME="DPIGate"
 
 HERE="${APPDIR:-$(dirname "$(readlink -f "$0")")}"
 VERSION="$(cat "$HERE/VERSION" 2>/dev/null || true)"
+
+# Shared objects the daemon links against, by SONAME, from the host.
+RUNTIME_LIBS="libnetfilter_queue.so.1 libnfnetlink.so.0 libmnl.so.0"
 
 say() { printf '[AppRun] %s\n' "$*" >&2; }
 die() { say "ERROR: $*"; exit 1; }
@@ -45,6 +53,9 @@ Usage:
   AppRun --install [flags]    copy and install again; flags are passed to install.sh
   AppRun --uninstall          remove DPIGate (runs the installed uninstall.sh)
   AppRun --help               show this help
+
+Requires the runtime packages of libnetfilter_queue, libnfnetlink and libmnl on
+this machine (not the -dev packages). The AppImage does not include them.
 
 install.sh flags (passed through):
   --system        install as a root/system service (systemd, OpenRC or runit)
@@ -119,6 +130,49 @@ if [ "${#INSTALL_ARGS[@]}" -gt 0 ]; then
     MODE_INSTALL=1
 fi
 
+# ── Runtime libraries from the host ─────────────────────────────────────────
+# Package names for the distribution, from linux/lib/platform.sh. Sourced in a
+# subshell so its settings cannot leak into this script (set -u).
+runtime_pkgs() {
+    local mgr
+    mgr="$( ( set +eu; . "$HERE/lib/platform.sh" >/dev/null 2>&1 && plat_pkgmgr ) 2>/dev/null || true )"
+    case "$mgr" in
+        pacman)  echo "libnetfilter_queue libnfnetlink libmnl" ;;
+        apt)     echo "libnetfilter-queue1 libnfnetlink0 libmnl0" ;;
+        dnf|yum) echo "libnetfilter_queue libnfnetlink libmnl" ;;
+        *)       echo "" ;;
+    esac
+}
+
+check_runtime_libs() {
+    local ldconfig_bin missing="" so cache pkgs
+    ldconfig_bin="$(command -v ldconfig 2>/dev/null || true)"
+    [ -n "$ldconfig_bin" ] || ldconfig_bin=/sbin/ldconfig
+    [ -x "$ldconfig_bin" ] || die "cannot find ldconfig; cannot check the runtime libraries"
+    cache="$("$ldconfig_bin" -p 2>/dev/null || true)"
+    for so in $RUNTIME_LIBS; do
+        if ! printf '%s\n' "$cache" | awk -v s="$so" '$1 == s { found = 1 } END { exit !found }'; then
+            missing="$missing $so"
+        fi
+    done
+    if [ -n "$missing" ]; then
+        pkgs="$(runtime_pkgs)"
+        say "ERROR: runtime libraries missing on this system:$missing"
+        if [ -n "$pkgs" ]; then
+            say "Install the runtime packages ($pkgs), then run AppRun again."
+        else
+            say "Install the runtime packages of libnetfilter_queue, libnfnetlink and libmnl"
+            say "(not the -dev packages), then run AppRun again."
+        fi
+        exit 1
+    fi
+}
+
+# --check-only, --help and --uninstall do not need the libraries.
+if [ "$CHECK_ONLY" -eq 0 ]; then
+    check_runtime_libs
+fi
+
 # ── Step 1: copy the payload out of the (read-only) AppImage mount ──────────
 copy_payload() {
     local tmp="$DEST.partial.$$"
@@ -148,29 +202,7 @@ else
     say "version $VERSION already copied to $DEST"
 fi
 
-# ── Step 2: install.sh from the copy, then the bundled libraries ────────────
-# install.sh copies only lib/*.sh into $DATA_DIR/lib, not the shared objects,
-# so this script copies lib*.so* there. This does NOT make the setcap'd daemon
-# use them: secure-execution ignores RUNPATH (see linux/Makefile). It only
-# helps a non-setcap run. Real AppImage support needs static linking.
-install_bundled_libs() {
-    local libdir="$DATA_DIR/lib" so base
-    mkdir -p "$libdir"
-    for so in "$DEST"/lib/lib*.so*; do
-        [ -e "$so" ] || continue
-        base="$(basename "$so")"
-        # Temp name then rename, like install.sh: a running daemon keeps the
-        # old inode instead of having its library overwritten under it.
-        cp -f "$so" "$libdir/$base.new" && mv -f "$libdir/$base.new" "$libdir/$base"
-    done
-    if [ -x "$DATA_DIR/goodbyedpi" ]; then
-        local missing
-        missing="$(LC_ALL=C ldd "$DATA_DIR/goodbyedpi" | grep 'not found' || true)"
-        [ -z "$missing" ] || die "goodbyedpi still has unresolved libraries:
-$missing"
-    fi
-}
-
+# ── Step 2: install.sh from the copy ────────────────────────────────────────
 if [ "$MODE_INSTALL" -eq 1 ] || [ ! -f "$DEST/.installed" ]; then
     # A check-only run must not clear the marker of an existing install.
     if [ "$CHECK_ONLY" -eq 0 ]; then
@@ -178,7 +210,6 @@ if [ "$MODE_INSTALL" -eq 1 ] || [ ! -f "$DEST/.installed" ]; then
     fi
     if [ "$DRY_RUN" -eq 1 ]; then
         say "would run: bash $DEST/install.sh --no-build ${INSTALL_ARGS[*]:-}"
-        say "would copy bundled libraries to $DATA_DIR/lib"
     else
         say "running install.sh from $DEST"
         if ! bash "$DEST/install.sh" --no-build ${INSTALL_ARGS[@]+"${INSTALL_ARGS[@]}"}; then
@@ -187,7 +218,6 @@ if [ "$MODE_INSTALL" -eq 1 ] || [ ! -f "$DEST/.installed" ]; then
         if [ "$CHECK_ONLY" -eq 1 ]; then
             say "--check-only: nothing was installed; not marking the install complete"
         else
-            install_bundled_libs
             : > "$DEST/.installed"
         fi
     fi
