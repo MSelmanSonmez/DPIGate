@@ -66,7 +66,8 @@ EOF
 }
 
 # ── Arguments ───────────────────────────────────────────────────────────────
-MODE_INSTALL=0
+MODE_INSTALL=0      # run install.sh (--install or any install option)
+FORCE_COPY=0        # copy the payload again (--install only)
 DO_UNINSTALL=0
 NO_TRAY=0
 DRY_RUN=0
@@ -75,7 +76,7 @@ INSTALL_ARGS=()
 for arg in "$@"; do
     case "$arg" in
         -h|--help)   usage; exit 0 ;;
-        --install)   MODE_INSTALL=1 ;;
+        --install)   MODE_INSTALL=1; FORCE_COPY=1 ;;
         --uninstall) DO_UNINSTALL=1 ;;
         --no-tray)   NO_TRAY=1 ;;
         --dry-run)   DRY_RUN=1 ;;
@@ -134,7 +135,9 @@ copy_payload() {
     say "payload copied to $DEST"
 }
 
-if [ "$MODE_INSTALL" -eq 1 ] || [ ! -f "$DEST/.complete" ]; then
+# Copy only when forced by --install or when no complete copy exists. Install
+# options (including --check-only) never replace an existing copy.
+if [ "$FORCE_COPY" -eq 1 ] || [ ! -f "$DEST/.complete" ]; then
     if [ "$DRY_RUN" -eq 1 ]; then
         say "would copy the payload to $DEST"
         # Copy anyway: the copy is the only side effect, and a dry run is
@@ -168,7 +171,10 @@ $missing"
 }
 
 if [ "$MODE_INSTALL" -eq 1 ] || [ ! -f "$DEST/.installed" ]; then
-    rm -f "$DEST/.installed"
+    # A check-only run must not clear the marker of an existing install.
+    if [ "$CHECK_ONLY" -eq 0 ]; then
+        rm -f "$DEST/.installed"
+    fi
     if [ "$DRY_RUN" -eq 1 ]; then
         say "would run: bash $DEST/install.sh --no-build ${INSTALL_ARGS[*]:-}"
         say "would copy bundled libraries to $DATA_DIR/lib"
