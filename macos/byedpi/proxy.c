@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include <signal.h>
 #include <assert.h>
 
@@ -12,6 +13,7 @@
 #include "extend.h"
 #include "error.h"
 #include "packets.h"
+#include "dns_resolver.h"
 
 #ifdef _WIN32
     #include <winsock2.h>
@@ -150,26 +152,35 @@ static inline int nb_socket(int domain, int type)
 static int resolve(const char *chost, int len, 
         union sockaddr_u *addr, int type) 
 {
-    struct addrinfo hints = {0}, *res = 0;
-    
-    hints.ai_socktype = type;
-    hints.ai_flags = AI_ADDRCONFIG;
-    if (!params.resolve)
-        hints.ai_flags |= AI_NUMERICHOST;
-    hints.ai_family = params.ipv6 ? AF_UNSPEC : AF_INET;
-    
+    /* DPIGate: no getaddrinfo(); it can block the event loop for 30 s. */
     char host[len + 1];
     host[len] = 0;
     memcpy(host, chost, len);
     
     LOG(LOG_S, "resolve: %s\n", host);
     
-    if (getaddrinfo(host, 0, &hints, &res) || !res) {
-        return -1;
+    struct in_addr a4;
+    memset(addr, 0, sizeof(*addr));
+    if (inet_pton(AF_INET, host, &a4) == 1) {
+        addr->in.sin_family = AF_INET;
+        addr->in.sin_addr = a4;
+        return 0;
     }
-    memcpy(addr, res->ai_addr, SA_SIZE(res->ai_addr));
-    freeaddrinfo(res);
-    
+    if (params.ipv6 && inet_pton(AF_INET6, host, &addr->in6.sin6_addr) == 1) {
+        addr->in6.sin6_family = AF_INET6;
+        return 0;
+    }
+    if (!params.resolve)
+        return -1;
+    if (!strcasecmp(host, "localhost")) {
+        addr->in.sin_family = AF_INET;
+        addr->in.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+        return 0;
+    }
+    if (dns_resolve(host, &a4))
+        return -1;
+    addr->in.sin_family = AF_INET;
+    addr->in.sin_addr = a4;
     return 0;
 }
 

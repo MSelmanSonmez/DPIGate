@@ -1,7 +1,7 @@
 # Builds a universal (x86_64 + arm64) ByeDPI SOCKS5 proxy for macOS.
 SRCDIR   := byedpi
 BUILD    := build
-SRC      := packets.c main.c conev.c proxy.c desync.c mpool.c extend.c
+SRC      := packets.c main.c conev.c proxy.c desync.c mpool.c extend.c dns_resolver.c
 HEADERS  := $(wildcard $(SRCDIR)/*.h)
 ARCHS    := x86_64 arm64
 CPPFLAGS := -D_DEFAULT_SOURCE
@@ -24,10 +24,15 @@ $(TARGET): $(foreach a,$(ARCHS),$(BUILD)/dpigate-proxy-$(a))
 	codesign --force -s - $@
 
 clean:
-	rm -f $(TARGET) $(foreach a,$(ARCHS),$(BUILD)/dpigate-proxy-$(a) $(patsubst %.c,$(BUILD)/$(a)/%.o,$(SRC)))
+	rm -f $(BUILD)/test_dns $(TARGET) $(foreach a,$(ARCHS),$(BUILD)/dpigate-proxy-$(a) $(patsubst %.c,$(BUILD)/$(a)/%.o,$(SRC)))
 	-rmdir $(foreach a,$(ARCHS),$(BUILD)/$(a)) $(BUILD) 2>/dev/null
 
-test:
+test: $(BUILD)/test_dns
+	@$(BUILD)/test_dns
 	@/bin/bash tests/test_dpigate.sh
+
+$(BUILD)/test_dns: tests/test_dns.c $(SRCDIR)/dns_resolver.c $(SRCDIR)/dns_resolver.h
+	@mkdir -p $(BUILD)
+	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ tests/test_dns.c $(SRCDIR)/dns_resolver.c
 
 .PHONY: all clean test
