@@ -57,6 +57,25 @@ set -e
 
 APP_NAME="DPIGate"
 
+# The AppImage runtime points XDG_CONFIG_HOME (and HOME, XDG_DATA_HOME, XDG_CACHE_HOME)
+# at <AppImage>.config (.home, .share, .cache) whenever such a directory exists next
+# to the AppImage, and this script creates <AppImage>.config for the portable mode's
+# settings. Left alone, every GTK program started from here (the installer wizard, the
+# choice dialog, the tray) then looks for gtk-3.0/settings.ini in that empty folder
+# and falls back to the default light Adwaita theme instead of the user's theme, and
+# an install would write its autostart entry there. So a value that is exactly the
+# runtime's own is undone. The user's own earlier value is not recoverable (the runtime
+# replaced it before this script started): unset means the XDG default, ~/.config etc.
+if [ -n "${APPIMAGE:-}" ]; then
+    [ "${XDG_CONFIG_HOME:-}" = "$APPIMAGE.config" ] && unset XDG_CONFIG_HOME
+    [ "${XDG_DATA_HOME:-}" = "$APPIMAGE.share" ] && unset XDG_DATA_HOME
+    [ "${XDG_CACHE_HOME:-}" = "$APPIMAGE.cache" ] && unset XDG_CACHE_HOME
+    if [ "${HOME:-}" = "$APPIMAGE.home" ]; then
+        _real_home="$(getent passwd "$(id -un)" 2>/dev/null | cut -d: -f6)"
+        [ -n "$_real_home" ] && [ -d "$_real_home" ] && export HOME="$_real_home"
+    fi
+fi
+
 HERE="${APPDIR:-$(dirname "$(readlink -f "$0")")}"
 VERSION="$(cat "$HERE/VERSION" 2>/dev/null || true)"
 

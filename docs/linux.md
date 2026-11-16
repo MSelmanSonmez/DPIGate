@@ -195,6 +195,15 @@ done: no `~/.local/share/DPIGate`, no systemd unit, no autostart entry, no menu 
   (read-only or removable media) the settings are kept in `~/.config/DPIGate` instead,
   and AppRun says so. To start over, delete the folder.
 - You can still edit **Program Filters** from the tray; the running engine picks the
+  The AppImage runtime treats a folder named `<AppImage file name>.config` next to the
+  AppImage as the AppImage's own config home and starts every run with `XDG_CONFIG_HOME`
+  pointing at it (likewise `.home`, `.share`, `.cache` for `HOME`, `XDG_DATA_HOME`,
+  `XDG_CACHE_HOME`). Left alone, GTK programs would then not find your
+  `~/.config/gtk-3.0` and show the default light Adwaita theme (this was measured). AppRun
+  therefore puts a value that is exactly the runtime's own back to the default (unset, so
+  `~/.config`, and the account's home for `HOME`) before it starts anything. A custom
+  `XDG_CONFIG_HOME` you had set yourself is replaced by the runtime before AppRun runs and
+  cannot be recovered; DPIGate then uses `~/.config`.
   changes up within a few seconds. Because the tray cannot restart the root engine,
   **DNS** and **Bypass All Traffic** choices are saved and take effect the next time you
   start DPIGate. The tray has no Auto Start and no Uninstall entry in this mode.
