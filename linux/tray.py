@@ -29,7 +29,9 @@ import sys
 import signal
 import atexit
 import shlex
+import stat
 import subprocess
+import fcntl
 
 # ── Env config ──────────────────────────────────────────────────────────────
 def _env_int(name: str, default: int) -> int:
@@ -894,7 +896,53 @@ def build_menu():
     return menu
 
 
+_instance_lock = None   # the open lock file; kept for the life of the process
+
+
+def _acquire_single_instance():
+    """True when this process is the only DPIGate tray for this user.
+
+    The lock is an flock(2) on a file in $XDG_RUNTIME_DIR (a per-user 0700
+    directory). The kernel releases it when the holder exits, however it
+    exits, so a crashed tray cannot leave a stale lock behind. The pid is not
+    used for this. If XDG_RUNTIME_DIR is unset, a private directory under the
+    temp dir is used; it must be owned by this user and not accessible to
+    others, otherwise no lock is taken and a warning is printed.
+    """
+    global _instance_lock
+    runtime = os.environ.get("XDG_RUNTIME_DIR", "")
+    if runtime and os.path.isdir(runtime):
+        base = runtime
+    else:
+        base = os.path.join("/tmp", "dpigate-%d" % os.getuid())
+        try:
+            os.mkdir(base, 0o700)
+        except FileExistsError:
+            pass
+        st = os.lstat(base)
+        if (not stat.S_ISDIR(st.st_mode) or st.st_uid != os.getuid()
+                or stat.S_IMODE(st.st_mode) & 0o077):
+            sys.stderr.write("[tray] %s is not a private directory; running without the single-instance lock\n" % base)
+            return True
+    fd = os.open(os.path.join(base, "dpigate-tray.lock"), os.O_RDWR | os.O_CREAT, 0o600)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        os.close(fd)
+        return False
+    _instance_lock = fd
+    return True
+
+
 def main():
+    # One tray per user. A second start (autostart plus the application menu,
+    # or the AppImage launched twice) exits quietly before it registers the
+    # teardown handlers or starts the watchdog, so it cannot report the
+    # engine as "exited unexpectedly" when the first tray stops it.
+    if not _acquire_single_instance():
+        sys.stderr.write("[tray] another DPIGate tray is already running; exiting\n")
+        sys.exit(0)
+
     # Use theme icon name (installed to ~/.local/share/icons/hicolor).
     # Falls back to file path if theme icon not found, then to "network-server".
     icon_name = "dpigate"
