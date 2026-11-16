@@ -7,6 +7,9 @@
 #   APPIMAGETOOL=/path/to/appimagetool   (default: appimagetool on PATH)
 #   APPIMAGE_EXTRACT_AND_RUN=1           passed through to appimagetool when it
 #                                        cannot use FUSE (containers, CI)
+#   APPIMAGE_RUNTIME_FILE=/path/runtime  local type 2 runtime, passed as
+#                                        --runtime-file. Without it appimagetool
+#                                        fetches the runtime from the network.
 #
 # Steps: build goodbyedpi with RUNPATH $ORIGIN/lib, stage an AppDir from
 # linux/ plus the three shared libraries the daemon needs, then run
@@ -111,7 +114,12 @@ fi
 
 OUT="$OUT_DIR/dpigate-$VERSION-x86_64.AppImage"
 rm -f "$OUT"
-ARCH=x86_64 "$TOOL" "$APPDIR" "$OUT"
+RUNTIME_ARGS=()
+if [ -n "${APPIMAGE_RUNTIME_FILE:-}" ]; then
+    [ -f "$APPIMAGE_RUNTIME_FILE" ] || die "APPIMAGE_RUNTIME_FILE does not exist: $APPIMAGE_RUNTIME_FILE"
+    RUNTIME_ARGS=(--runtime-file "$APPIMAGE_RUNTIME_FILE")
+fi
+ARCH=x86_64 "$TOOL" ${RUNTIME_ARGS[@]+"${RUNTIME_ARGS[@]}"} "$APPDIR" "$OUT"
 [ -s "$OUT" ] || die "appimagetool did not produce $OUT"
 chmod 0755 "$OUT"
 echo "[build-appimage] wrote $OUT"
