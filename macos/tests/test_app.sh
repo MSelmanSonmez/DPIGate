@@ -46,7 +46,15 @@ launch() { # <dir>
   APP_PID=$!
 }
 
+RES=$(cd "$(dirname "$APPBIN")/../Resources" 2>/dev/null && pwd)
 [ -x "$APPBIN" ] || { echo "app binary missing: $APPBIN (run: make -C macos app)"; exit 1; }
+
+# 0. bundle icons: menu bar logo at 18 and 36 px, app icon
+w() { sips -g pixelWidth "$1" 2>/dev/null | awk '/pixelWidth/{print $2}'; }
+check "menubar.png is 18 px wide" '[ "$(w "$RES/menubar.png")" = 18 ]'
+check "menubar@2x.png is 36 px wide" '[ "$(w "$RES/menubar@2x.png")" = 36 ]'
+check "AppIcon.icns exists and is a valid icon file" '[ -s "$RES/AppIcon.icns" ] && file "$RES/AppIcon.icns" | grep -q "Mac OS X icon"'
+check "Info.plist names the icon" '[ "$(plutil -extract CFBundleIconFile raw "$RES/../Info.plist")" = AppIcon ]'
 
 # 1. autostart runs the script; SIGTERM makes the app interrupt it and wait for its restore
 A=$ROOT/a; mkdir -p "$A"; make_fake "$A"

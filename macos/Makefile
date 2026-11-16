@@ -39,7 +39,9 @@ SWIFTSRC := app/main.swift
 
 app: $(APP)/Contents/MacOS/DPIGate
 
-$(APP)/Contents/MacOS/DPIGate: $(SWIFTSRC) app/Info.plist dpigate $(TARGET)
+ICON     := ../docs/icon.png
+
+$(APP)/Contents/MacOS/DPIGate: $(SWIFTSRC) app/Info.plist dpigate $(TARGET) $(ICON)
 	@rm -rf $(APP)
 	@mkdir -p $(APP)/Contents/MacOS $(APP)/Contents/Resources $(BUILD)/app
 	swiftc -O -target x86_64-apple-macos11 -o $(BUILD)/app/DPIGate-x86_64 $(SWIFTSRC)
@@ -48,11 +50,18 @@ $(APP)/Contents/MacOS/DPIGate: $(SWIFTSRC) app/Info.plist dpigate $(TARGET)
 	cp app/Info.plist $(APP)/Contents/Info.plist
 	cp dpigate $(APP)/Contents/Resources/dpigate
 	cp $(TARGET) $(APP)/Contents/Resources/dpigate-proxy
+	sips -z 18 18 $(ICON) --out $(APP)/Contents/Resources/menubar.png >/dev/null
+	sips -z 36 36 $(ICON) --out $(APP)/Contents/Resources/menubar@2x.png >/dev/null
+	@mkdir -p $(BUILD)/app/AppIcon.iconset
+	@for spec in 16:16x16 32:16x16@2x 32:32x32 64:32x32@2x 128:128x128 256:128x128@2x 256:256x256; do \
+	  sips -z $${spec%%:*} $${spec%%:*} $(ICON) --out $(BUILD)/app/AppIcon.iconset/icon_$${spec#*:}.png >/dev/null || exit 1; done
+	iconutil -c icns -o $(APP)/Contents/Resources/AppIcon.icns $(BUILD)/app/AppIcon.iconset
 	codesign --force --deep -s - $(APP)
 
 test: $(BUILD)/test_dns app
 	@$(BUILD)/test_dns
 	@/bin/bash tests/test_dpigate.sh
 	@/bin/bash tests/test_app.sh
+	@/bin/bash tests/test_app_menu.sh
 
 .PHONY: all clean test app
