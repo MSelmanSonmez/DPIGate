@@ -346,6 +346,22 @@ wait_for_listener() {
   return 1
 }
 
+# reap_orphan: after load_state. If the run that wrote the state is still alive but its owner is gone
+# (the menu bar app was killed: the run is re-parented to launchd, ppid 1) stop it with SIGTERM so its own
+# cleanup puts the settings back. Only a process whose command line is this kind of `dpigate ... run`
+# is signalled, so a reused pid is never touched.
+reap_orphan() {
+  local pid=$S_SCRIPT_PID cmd i
+  [ -n "$pid" ] && pid_alive "$pid" || return 0
+  cmd=$(ps -p "$pid" -o command= </dev/null 2>/dev/null)
+  case "$cmd" in *dpigate*" run"*) ;; *) return 0;; esac
+  [ "$(ps -p "$pid" -o ppid= </dev/null 2>/dev/null | tr -d ' ')" = 1 ] || return 0
+  echo "dpigate: stopping a run (pid $pid) whose owner is gone"
+  kill -TERM "$pid" 2>/dev/null
+  i=0
+  while [ $i -lt 100 ] && pid_alive "$pid"; do sleep 0.1; i=$((i + 1)); done
+}
+
 cmd_run() {
   [ "${1:-}" = "--" ] && shift
   [ -x "$PROXY_BIN" ] || die "proxy binary not found: $PROXY_BIN (build it with: make -C macos)"
@@ -354,11 +370,14 @@ cmd_run() {
 
   if [ -f "$STATE_FILE" ]; then
     load_state || exit 1
+    reap_orphan
     if [ -n "$S_SCRIPT_PID" ] && pid_alive "$S_SCRIPT_PID"; then
       die "another dpigate run seems active (pid $S_SCRIPT_PID); stop it first"
     fi
-    echo "dpigate: previous run did not exit cleanly; restoring its settings first"
-    restore_state || die "could not restore previous settings; fix the error above, then run 'dpigate restore'"
+    if [ -f "$STATE_FILE" ]; then   # the orphan's own cleanup may already have restored and removed it
+      echo "dpigate: previous run did not exit cleanly; restoring its settings first"
+      restore_state || die "could not restore previous settings; fix the error above, then run 'dpigate restore'"
+    fi
   fi
 
   read_current "$svc" || exit 1
@@ -422,9 +441,11 @@ cmd_restore() {
     return 0
   fi
   load_state || return 1
+  reap_orphan
   if [ -n "$S_SCRIPT_PID" ] && pid_alive "$S_SCRIPT_PID"; then
     die "a dpigate run is still active (pid $S_SCRIPT_PID); stop it with Ctrl-C instead"
   fi
+  if [ ! -f "$STATE_FILE" ]; then echo "dpigate: previous settings restored"; return 0; fi
   restore_state || return 1
   echo "dpigate: previous settings restored"
 }

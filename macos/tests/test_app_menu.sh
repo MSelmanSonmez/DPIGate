@@ -254,6 +254,32 @@ wait_for 20 has_line "$G/Logs/DPIGate/dpigate.log" "running on"
 stop_app
 check "real script: proxy args are '... --tlsrec 1+s -H <list> -An'" 'grep -q -e "--tlsrec 1+s -H $DEFS -An\$" "$FAKE/proxy_args"'
 
+# (h) The app dies by SIGKILL: its `dpigate run` child is orphaned. The next launch must stop it, restore, and run again.
+H=$ROOT/h; mkdir -p "$H/AppSupport/DPIGate/config"; make_fakes "$H"; fake_launchctl_keep "$H"; export FAKE=$H/fake
+echo 8.8.8.8 > "$FAKE/dns"; : > "$FAKE/bypass"; : > "$FAKE/calls.log"; printf 'no\n' > "$FAKE/socks_enabled"
+printf 'dns_index=0\n' > "$H/AppSupport/DPIGate/config/config"
+HPORT=$((20000 + RANDOM % 20000))
+h_start() {
+  app_env "$H" DPIGATE_APP_SCRIPT="$DPIGATE" DPIGATE_APP_AUTOSTART=1 DPIGATE_PORT=$HPORT PROXY_BIN="$H/proxy" \
+      NETWORKSETUP="$H/networksetup" ROUTE="$H/route" DSCACHEUTIL="$H/dscacheutil" OSASCRIPT="$H/osascript" \
+      RESOLVE_CMD="$H/resolve -q host -a name" DPIGATE_WARMUP_SECS=3 DPIGATE_APP_DNS_CANDIDATES="Good|127.0.0.1|9" LAUNCHCTL="$H/launchctl"
+}
+running_count() { grep -c "running on" "$H/Logs/DPIGate/dpigate.log" 2>/dev/null; }
+n_running() { [ "$(running_count)" -ge "$1" ]; }
+h_start
+wait_for 20 n_running 1
+OLD=$(sed -n 's/^script_pid=//p' "$H/AppSupport/DPIGate/state"); OLDPROXY=$(sed -n 's/^proxy_pid=//p' "$H/AppSupport/DPIGate/state")
+kill -KILL "$APP_PID"; wait "$APP_PID" 2>/dev/null; APP_PID=
+check "SIGKILL: the run child is orphaned and still running (the problem)" '[ -n "$OLD" ] && kill -0 "$OLD" 2>/dev/null && [ "$(cat "$FAKE/socks_enabled")" = yes ]'
+h_start
+wait_for 30 n_running 2
+NEW=$(sed -n 's/^script_pid=//p' "$H/AppSupport/DPIGate/state")
+check "relaunch: a new run is up, the orphan and its proxy are gone" 'n_running 2 && [ -n "$NEW" ] && [ "$NEW" != "$OLD" ] && ! kill -0 "$OLD" 2>/dev/null && ! kill -0 "$OLDPROXY" 2>/dev/null'
+check "relaunch: settings are applied again, original DNS saved (not dpigate's)" '[ "$(cat "$FAKE/socks_enabled")" = yes ] && grep -q "^dns=8.8.8.8" "$H/AppSupport/DPIGate/state"'
+kill -TERM "$APP_PID" 2>/dev/null; wait_for 15 gone "$APP_PID"; APP_PID=
+check "relaunch then quit: settings restored" '[ "$(cat "$FAKE/socks_enabled")" = no ] && [ "$(cat "$FAKE/dns")" = 8.8.8.8 ]'
+for p in $OLD $OLDPROXY; do kill -0 "$p" 2>/dev/null && kill "$p" 2>/dev/null; done
+
 iso_guard_end
 echo "$PASSED passed, $FAILED failed"
 [ $FAILED -eq 0 ]

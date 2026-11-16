@@ -326,6 +326,35 @@ test_16_dns_names_split_proxy_and_system() {
   finish "DPIGATE_DNS (proxy) and system DNS are separate"
 }
 
+test_17_restore_never_signals_a_foreign_pid() {
+  setup no "" 0 "1.1.1.1 1.0.0.1" "localhost"
+  # script_pid belongs to an unrelated process that looks orphaned (parent 1) but is not a dpigate run.
+  ( sleep 60 </dev/null >/dev/null 2>&1 & echo $! > "$T/foreign" )
+  local fp
+  wait_for "[ -s '$T/foreign' ]"; fp=$(cat "$T/foreign")
+  mkdir -p "$STATE_DIR"
+  printf 'version=1\nservice=Test Ethernet\nscript_pid=%s\nproxy_pid=\nproxy_comm=\nsocks_applied=1\nsocks_enabled=no\nsocks_server=\nsocks_port=0\nbypass=localhost\ndns=8.8.8.8\n' "$fp" > "$STATE_DIR/state"
+  /bin/bash "$DPIGATE" restore </dev/null >"$T/restore.out" 2>&1
+  check "restore refuses (run seems active)" "[ $? -ne 0 ] && grep -q 'still active' '$T/restore.out'"
+  check "the foreign process was not signalled" "kill -0 $fp 2>/dev/null"
+  check "state file kept" "[ -f '$STATE_DIR/state' ]"
+  kill "$fp" 2>/dev/null
+  finish "restore never signals a pid that is not an orphaned dpigate run"
+}
+test_18_restore_leaves_a_run_that_still_has_an_owner() {
+  setup no "" 0 "1.1.1.1 1.0.0.1" "localhost"
+  # Looks like "dpigate run" on the command line but its parent is alive (a run in a terminal): must not be stopped.
+  /bin/bash -c 'sleep 60; true' dpigate run </dev/null >/dev/null 2>&1 &
+  local fp=$!
+  mkdir -p "$STATE_DIR"
+  printf 'version=1\nservice=Test Ethernet\nscript_pid=%s\nproxy_pid=\nproxy_comm=\nsocks_applied=1\nsocks_enabled=no\nsocks_server=\nsocks_port=0\nbypass=localhost\ndns=8.8.8.8\n' "$fp" > "$STATE_DIR/state"
+  /bin/bash "$DPIGATE" restore </dev/null >"$T/restore.out" 2>&1
+  check "restore refuses while the owner lives" "[ $? -ne 0 ] && grep -q 'still active' '$T/restore.out'"
+  check "the run was not signalled" "kill -0 $fp 2>/dev/null"
+  kill "$fp" 2>/dev/null; wait "$fp" 2>/dev/null
+  finish "restore leaves a run whose owner is alive"
+}
+
 trap 'teardown; rm -rf "$ROOT"' EXIT
 
 test_1_run_applies_then_int_restores
@@ -344,6 +373,8 @@ test_13_proxy_fails_no_web_or_env
 test_14_old_state_file_restore
 test_15_proxy_args_socks_and_http
 test_16_dns_names_split_proxy_and_system
+test_17_restore_never_signals_a_foreign_pid
+test_18_restore_leaves_a_run_that_still_has_an_owner
 
 iso_guard_end
 echo "SUMMARY: $PASSED passed, $FAILED failed"
