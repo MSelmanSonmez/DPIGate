@@ -469,7 +469,10 @@ plat_root_cmd() {
 plat_run_root() {
     local mech rc=0 what="$*"
     # Keep log lines short: a sh -c body is a whole script ($3), $4 is its $0.
-    if [ "${1:-}" = sh ] && [ "${2:-}" = "-c" ]; then what="sh -c <script> ${*:5}"; fi
+    case "${1:-}" in
+        sh|bash|/bin/sh|/bin/bash|/usr/bin/sh|/usr/bin/bash)
+            if [ "${2:-}" = "-c" ]; then what="$1 -c <script> ${*:5}"; fi ;;
+    esac
     if ! mech="$(plat_root_cmd)"; then
         echo "plat_run_root failed (rc=1) via none: $what" | tee -a "$PLAT_LOG" >&2
         return 1
