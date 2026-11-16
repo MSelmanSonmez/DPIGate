@@ -33,18 +33,8 @@ SRCS += $(BYPASS_SRCS) goodbyedpi.c
 
 OBJS    = $(SRCS:.c=.o)
 
-# RUNPATH $ORIGIN/lib: lets an ordinary (non-setcap) run load libraries from
-# a directory next to the binary. It does NOT work for the daemon as installed:
-# a binary with file capabilities (setcap cap_net_raw,cap_net_admin+ep) runs
-# in secure-execution mode, and glibc ignored this RUNPATH there too (measured
-# with glibc 2.44). So the AppImage cannot rely on bundled shared libraries;
-# it needs static linking of libnetfilter_queue/libnfnetlink/libmnl, which
-# this Makefile does not provide yet. On a distro build the path does not
-# exist and the system libraries are used as before.
-TARGET_RPATH = -Wl,-rpath,'$$ORIGIN/lib'
-
 $(TARGET): $(OBJS)
-	$(CC) $(CFLAGS) $(LDFLAGS) $(TARGET_RPATH) -o $@ $(OBJS) $(LIBS)
+	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $(OBJS) $(LIBS)
 
 # Smoke test — NFQUEUE passthrough
 smoke_test: smoke_test.o packet_io_linux.o rawsend_linux.o
