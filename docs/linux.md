@@ -142,19 +142,27 @@ resolution, and build all OK.` Remaining `missing:` lines are real problems;
 It does **not** contain the C libraries the daemon links against, nor `nftables`,
 `iptables`, `libcap`, or the Python/GTK stack for the tray; those come from the host.
 
-**Runtime libraries on the host.** The daemon needs the runtime packages of
-`libnetfilter_queue`, `libnfnetlink` and `libmnl`. Running the AppImage needs no
+**Runtime packages.** The daemon needs the runtime packages of
+`libnetfilter_queue`, `libnfnetlink` and `libmnl`; the tray needs python3 with
+GTK 3 and AyatanaAppIndicator3 (or AppIndicator3). Running the AppImage needs no
 compiler and no `-dev` packages. Before it copies or installs anything, AppRun
-checks for these libraries with `ldconfig -p`. If one is missing, AppRun names the
-packages and exits with status 1; it does not install anything itself:
+checks for them and installs what is missing through the distribution's package
+manager (`linux/lib/platform.sh`, the same code `install.sh` uses), after one
+password prompt:
 
-- Arch: `libnetfilter_queue libnfnetlink libmnl`
-- Debian / Ubuntu: `libnetfilter-queue1 libnfnetlink0 libmnl0`
-- Fedora / RHEL: `libnetfilter_queue libnfnetlink libmnl`
+- The three libraries are required. Their runtime names: Arch
+  `libnetfilter_queue libnfnetlink libmnl`; Debian/Ubuntu
+  `libnetfilter-queue1 libnfnetlink0 libmnl0`; Fedora/RHEL
+  `libnetfilter_queue libnfnetlink libmnl`. If they still cannot be installed,
+  AppRun names them and exits with status 1. For other package managers AppRun
+  does not know the names; it prints a generic message and exits 1.
+- The tray is optional. If its packages cannot be installed, the install
+  continues without the tray icon and AppRun prints a warning. Install the tray
+  packages yourself and start the AppImage again to get the icon.
 
-Install the packages with your package manager and start the AppImage again. The
-check runs for `--dry-run` as well. `--check-only`, `--help` and `--uninstall`
-skip it.
+`--assume-deps` installs no packages: missing libraries are reported and AppRun
+exits 1; missing tray packages only produce the warning. `--dry-run` never
+installs. `--check-only`, `--help` and `--uninstall` skip this step.
 
 **Running it.** Make the file executable and start it:
 
