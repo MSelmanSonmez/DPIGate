@@ -6,7 +6,7 @@
 # the firewall rules for as long as the tray lives, then removes everything,
 # including its own directory.
 #
-# Usage (internal): portable-root.sh UID GID WATCH_PID ROLES USER_CFG_DIR RUN_DIR
+# Usage (internal): portable-root.sh UID GID WATCH_PID ROLES USER_CFG_DIR RUN_DIR NONCE
 #
 # What it reuses instead of reimplementing:
 #   lib/platform.sh   plat_deps_install, plat_fw_is_loaded/plat_fw_load
@@ -22,7 +22,7 @@
 
 exec 3>&2   # the caller's stderr, kept for error reports after the log redirect
 
-uid="${1:?}"; gid="${2:?}"; watch="${3:?}"; roles="${4:-}"; usercfg="${5:?}"; RD="${6:?}"
+uid="${1:?}"; gid="${2:?}"; watch="${3:?}"; roles="${4:-}"; usercfg="${5:?}"; RD="${6:?}"; nonce="${7:?}"
 APP="$RD/app"; DATA="$RD/data"; CFG="$RD/cfg"
 IS_ROOT=0
 [ "$(id -u)" = "0" ] && IS_ROOT=1
@@ -31,7 +31,7 @@ umask 022
 cd / || exit 1
 echo "$$" > "$DATA/helper.pid"
 
-write_state() {   # write_state "ready PID": AppRun polls $DATA/state
+write_state() {   # write_state "ready PID NONCE": AppRun polls $DATA/state
     printf '%s\n' "$1" > "$DATA/state.tmp" 2>/dev/null \
         && mv -f "$DATA/state.tmp" "$DATA/state" 2>/dev/null
     return 0
@@ -39,12 +39,18 @@ write_state() {   # write_state "ready PID": AppRun polls $DATA/state
 
 TD=0
 REAPER_PID=0
+STARTED=0     # 1 once start.sh was attempted: before that there is nothing of ours to undo
 teardown() {
     [ "$TD" -eq 1 ] && return 0
     TD=1
     trap '' TERM INT HUP
     [ "$REAPER_PID" -gt 0 ] && kill "$REAPER_PID" 2>/dev/null
-    PLAT_NOPROMPT=1 bash "$APP/kill.sh" >>"$DATA/helper.log" 2>&1
+    # kill.sh stops EVERY goodbyedpi on our queue and removes the rules: only run
+    # it when this session may have started something (an installed engine that
+    # was never ours must survive a failed start of this one).
+    if [ "$STARTED" -eq 1 ]; then
+        PLAT_NOPROMPT=1 bash "$APP/kill.sh" >>"$DATA/helper.log" 2>&1
+    fi
     cd / && rm -rf -- "$RD"
     return 0
 }
@@ -127,12 +133,13 @@ last_stamp="$(stamp "$usercfg/ProgramFilters")"
 kill -0 "$watch" 2>/dev/null || die 14 "the tray (pid $watch) is already gone"
 
 # --restart: take over a stale engine or rule set instead of "already running".
+STARTED=1
 bash "$APP/start.sh" --no-tray --restart || die 14 "start.sh failed (see $DATA/helper.log)"
 
 gpid="$(cat "$DATA/goodbyedpi.pid" 2>/dev/null)"
 case "$gpid" in ''|*[!0-9]*) die 14 "the engine left no PID file" ;; esac
 [ -d "/proc/$gpid" ] || die 14 "the engine exited right away (see $DATA/goodbyedpi.log)"
-write_state "ready $gpid"
+write_state "ready $gpid $nonce"
 
 # ── watch ───────────────────────────────────────────────────────────────────
 # reaper.sh returns only after the tray is gone (and then runs kill.sh itself).

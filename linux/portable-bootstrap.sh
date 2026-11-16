@@ -11,6 +11,8 @@
 #               AppImage mount (read-only, so the user cannot alter it)
 #   $5 roles    "", "nfq", "tray" or "nfq tray": packages to install
 #   $6 usercfg  absolute path of the user's settings directory
+#   $7 nonce    letters/digits/dots; echoed in the "ready" state so AppRun never
+#               mistakes a dead session's leftovers for this one
 #
 # What it does: make a fresh root-owned run directory, copy the tarball INTO it
 # (one read, so nothing can change afterwards), refuse unless the copy's SHA-256
@@ -44,7 +46,7 @@ if [ "$IS_ROOT" -eq 0 ] && [ -n "${DPIGATE_TEST_PATH:-}" ]; then
 fi
 
 uid="${1:-}"; watch="${2:-}"; tarball="${3:-}"; want="${4:-}"
-roles="${5:-}"; usercfg="${6:-}"
+roles="${5:-}"; usercfg="${6:-}"; nonce="${7:-}"
 
 case "$uid" in ''|*[!0-9]*|0|0[0-9]*) fail 16 "bad uid" ;; esac
 case "$watch" in ''|*[!0-9]*|0) fail 16 "bad pid to watch" ;; esac
@@ -54,6 +56,8 @@ esac
 [ "${#want}" -eq 64 ] || fail 16 "bad hash"
 case "$tarball" in /*) ;; *) fail 16 "tarball path must be absolute" ;; esac
 case "$usercfg" in /*) ;; *) fail 16 "settings path must be absolute" ;; esac
+case "$nonce" in ''|*[!0-9A-Za-z.]*) fail 16 "bad nonce" ;; esac
+[ "${#nonce}" -le 64 ] || fail 16 "bad nonce"
 case "$tarball$usercfg" in *$'\n'*) fail 16 "newline in a path" ;; esac
 for _r in $roles; do
     case "$_r" in nfq|tray) ;; *) fail 16 "bad role '$_r'" ;; esac
@@ -147,4 +151,4 @@ chmod -R go-w "$RD/app"
 [ -f "$RD/app/goodbyedpi" ] && chmod 0700 "$RD/app/goodbyedpi"
 
 cd / || exit 1
-exec bash --noprofile --norc "$RD/app/portable-root.sh" "$uid" "$gid" "$watch" "$roles" "$usercfg" "$RD" </dev/null
+exec bash --noprofile --norc "$RD/app/portable-root.sh" "$uid" "$gid" "$watch" "$roles" "$usercfg" "$RD" "$nonce" </dev/null
