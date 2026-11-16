@@ -146,6 +146,8 @@ macos/dpigate restore    # put the saved settings back after a crash or kill -9
 macos/dpigate status     # proxy state and current proxy/DNS settings
 ```
 
+A menu bar app (early preview) wraps the same script: `make -C macos app` builds `macos/build/DPIGate.app` (universal, ad-hoc signed, no Dock icon). Its menu has Turn On / Turn Off, Open Log and Exit; the log is `~/Library/Logs/DPIGate/dpigate.log`. Turn Off and Exit send the script Ctrl-C, so your settings are restored; if it dies on its own the app restarts it (up to 3 times a minute). Because the app is not notarized, the first launch may need right-click, Open (or `xattr -d com.apple.quarantine` if it was downloaded). `make -C macos test` also runs the app's lifecycle test (`tests/test_app.sh`, fake script, touches no system setting).
+
 The proxy resolves names itself (UDP DNS to 1.1.1.1, then 1.0.0.1, 1 s timeout, cached) so a stalled system resolver cannot freeze it; set `DPIGATE_DNS="ip ip"` to change the servers.
 
 The proxy speaks SOCKS5 and HTTP CONNECT on the same port. `run` points the system SOCKS, web and secure web proxies at it and sets `HTTPS_PROXY`/`HTTP_PROXY` with `launchctl setenv`, so apps that ignore the system proxy (Discord's updater) are covered when started normally, e.g. from the Dock. Environment variables only reach apps launched afterwards: restart Discord after starting dpigate.
