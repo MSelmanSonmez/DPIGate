@@ -167,7 +167,7 @@ The app is built as a universal binary (Intel and Apple Silicon), but only Intel
 
 | Menu item | What it does |
 |---|---|
-| **Turn On / Turn Off** | Starts the proxy, sets DNS, flushes the DNS cache and points the system proxies at it, or undoes all of that. Each Turn On asks for an administrator password (the DNS cache flush needs it) |
+| **Turn On / Turn Off** | Starts the proxy, sets DNS, flushes the DNS cache and points the system proxies at it, or undoes all of that. Each start of the proxy asks for an administrator password (the DNS cache flush needs it) |
 | **DNS: …** | Candidate servers, measured in the background with one plain, unencrypted UDP query for discord.com; Auto-detect skips servers that answer with a poisoned address. Pick one or Auto-detect. A choice on port 53 also becomes the system DNS |
 | **Only Listed Sites** | Applies the DPI tricks only to the domains in `sites.txt` (subdomains included; defaults to Discord's domains; off by default) and passes every other connection through unchanged |
 | **Edit Site List** | Opens `sites.txt`; edits restart a running proxy within 2 seconds. New on macOS: the Linux tray has no such item (there the program filter does this job) |
@@ -196,7 +196,7 @@ The proxy speaks SOCKS5 and HTTP CONNECT on the same port. `run` points the syst
 
 The proxy resolves names itself (plain UDP DNS, 1 s timeout, cached) so a stalled system resolver cannot freeze it. Its servers are the DNS chosen in the menu, or 1.1.1.1 then 1.0.0.1 when started without `DPIGATE_DNS`; `DPIGATE_DNS="ip ip"` sets them. The system DNS gets the same servers, but only the port-53 ones are taken (`DPIGATE_SYSTEM_DNS` overrides), so a Yandex entry on port 1253 leaves the system on 1.1.1.1 and 1.0.0.1.
 
-`run` saves your previous proxy, environment and DNS settings in `~/Library/Application Support/DPIGate/state` and restores them on exit. The script never calls `sudo` itself. Flushing the DNS cache needs root, so every start (Turn On or `run`) shows macOS's own password dialog, opened through `osascript`; restoring on exit does not ask. If you cancel it, `run` continues but the first page loads may be slow.
+`run` saves your previous proxy, environment and DNS settings in `~/Library/Application Support/DPIGate/state` and restores them on exit. The script never calls `sudo` itself. Flushing the DNS cache needs root, so every start of the proxy (Turn On, `run`, or a restart caused by a menu change) shows macOS's own password dialog, opened through `osascript`; restoring on exit does not ask. If you cancel it, `run` continues but the first page loads may be slow.
 
 ### Files
 
@@ -213,6 +213,7 @@ The proxy resolves names itself (plain UDP DNS, 1 s timeout, cached) so a stalle
 - Switching between Wi-Fi and Ethernet may not apply the proxy to the new network service. Turn DPIGate off and on again after switching.
 - No Bypass All or Program Filters on macOS; selection is by site list only.
 - Apple Silicon (arm64) builds are untested.
+- Each restart of the proxy (turning on, changing DNS, toggling Only Listed Sites, saving the site list) asks for the administrator password.
 - Not notarized, so the first launch needs the approval steps above.
 - DNS measurement is plain UDP, not encrypted: port 53, and port 1253 for the Yandex candidate.
 
