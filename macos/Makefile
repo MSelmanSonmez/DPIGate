@@ -24,7 +24,7 @@ $(TARGET): $(foreach a,$(ARCHS),$(BUILD)/dpigate-proxy-$(a))
 	codesign --force -s - $@
 
 clean:
-	rm -rf $(BUILD)/DPIGate.app $(BUILD)/app
+	rm -rf $(BUILD)/DPIGate.app $(BUILD)/app $(BUILD)/dist $(BUILD)/DPIGate-macos.zip
 	rm -f $(BUILD)/test_dns $(TARGET) $(foreach a,$(ARCHS),$(BUILD)/dpigate-proxy-$(a) $(patsubst %.c,$(BUILD)/$(a)/%.o,$(SRC)))
 	-rmdir $(foreach a,$(ARCHS),$(BUILD)/$(a)) $(BUILD) 2>/dev/null
 
@@ -58,10 +58,23 @@ $(APP)/Contents/MacOS/DPIGate: $(SWIFTSRC) app/Info.plist dpigate $(TARGET) $(IC
 	iconutil -c icns -o $(APP)/Contents/Resources/AppIcon.icns $(BUILD)/app/AppIcon.iconset
 	codesign --force --deep -s - $(APP)
 
+# Release zip: DPIGate-macos/{DPIGate.app,install.sh,uninstall.sh}.
+DIST     := $(BUILD)/DPIGate-macos.zip
+
+dist: app
+	@rm -rf $(BUILD)/dist $(DIST)
+	@mkdir -p $(BUILD)/dist/DPIGate-macos
+	ditto $(APP) $(BUILD)/dist/DPIGate-macos/DPIGate.app
+	cp install.sh uninstall.sh $(BUILD)/dist/DPIGate-macos/
+	chmod +x $(BUILD)/dist/DPIGate-macos/install.sh $(BUILD)/dist/DPIGate-macos/uninstall.sh
+	cd $(BUILD)/dist && ditto -c -k --keepParent DPIGate-macos ../DPIGate-macos.zip
+	@rm -rf $(BUILD)/dist
+
 test: $(BUILD)/test_dns app
 	@$(BUILD)/test_dns
 	@/bin/bash tests/test_dpigate.sh
 	@/bin/bash tests/test_app.sh
 	@/bin/bash tests/test_app_menu.sh
+	@/bin/bash tests/test_install.sh
 
-.PHONY: all clean test app
+.PHONY: all clean test app dist
