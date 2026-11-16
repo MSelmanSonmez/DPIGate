@@ -8,7 +8,7 @@
 [![Linux CI](https://github.com/MSelmanSonmez/DPIGate/actions/workflows/linux.yml/badge.svg)](../../actions/workflows/linux.yml)
 [![macOS CI](https://github.com/MSelmanSonmez/DPIGate/actions/workflows/macos.yml/badge.svg)](../../actions/workflows/macos.yml)
 
-**Per-program DPI bypass for Windows and Linux, site-list bypass for macOS (experimental).** A fork of
+**Per-program DPI bypass for Windows and Linux; on macOS (experimental) a system-proxy bypass for all sites or a site list.** A fork of
 [GoodbyeDPI](https://github.com/ValdikSS/GoodbyeDPI) that applies bypass tricks
 *only* to the programs you choose — browsers, Discord, whatever you list —
 while every other connection passes through untouched.
@@ -64,8 +64,8 @@ use a local proxy.
 | How it works | GoodbyeDPI engine, packet level (WinDivert) | Same engine, packet level (NFQUEUE) | ByeDPI SOCKS5/HTTP proxy, set as the system proxy |
 | Which traffic | Programs in the filter list | Programs in the filter list | Only apps that follow the system proxy (Firefox needs "Use system proxy settings") |
 | Per-program filter list | Yes | Yes | No |
-| Bypass All Traffic | Yes | Yes | No (the system proxy is always on while DPIGate runs) |
-| Choosing what gets the bypass | Filter list of programs | Filter list of programs | Site list (Only Listed Sites) |
+| Bypass All Traffic | Toggle | Toggle | Always on by default: every site that goes through the system proxy gets the bypass |
+| Narrowing it down | Filter list of programs | Filter list of programs | Only Listed Sites: just the domains in a site list |
 | Fake packets, TTL tricks | Yes | Yes | No |
 | DNS auto-detection | Yes | Yes | Yes |
 
@@ -185,7 +185,7 @@ A menu bar app around a SOCKS5 proxy built on [ByeDPI](https://github.com/hufrea
 
 Tested on Intel macOS 13 (13.7.8); Apple Silicon builds are untested.
 
-There is no Bypass All or Program Filters item on macOS: what gets the bypass is chosen with the site list (Only Listed Sites) instead.
+There is no Program Filters item on macOS and no separate Bypass All switch: by default every site that goes through the system proxy gets the bypass. Only Listed Sites narrows it to the domains in a site list.
 
 ### Install
 
@@ -252,7 +252,7 @@ The proxy resolves names itself (plain UDP DNS, 1 s timeout, cached) so a stalle
 ### Known limitations
 
 - Switching between Wi-Fi and Ethernet may not apply the proxy to the new network service. Turn DPIGate off and on again after switching.
-- No Bypass All or Program Filters on macOS; selection is by site list only.
+- No per-program filter list on macOS. By default every site gets the bypass; Only Listed Sites limits it to a site list.
 - Apple Silicon (arm64) builds are untested.
 - Each restart of the proxy (turning on, changing DNS, toggling Only Listed Sites, saving the site list) asks for the administrator password.
 - Not notarized, so the first launch needs the approval steps above.
