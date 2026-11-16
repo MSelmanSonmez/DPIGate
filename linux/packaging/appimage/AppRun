@@ -1,42 +1,59 @@
 #!/bin/bash
 # AppRun — entry point of the DPIGate AppImage (Linux, x86_64).
 #
-# The AppImage is a read-only FUSE mount, but install.sh has to write files,
-# setcap the daemon and load firewall rules. So the payload is first copied
-# out of the mount to
-#     ${XDG_DATA_HOME:-~/.local/share}/DPIGate/<version>/
-# install.sh is run from that copy with --no-build (the binary is prebuilt),
-# and the tray is started. Later launches of the same version only start the
-# tray.
+# Two ways to use the AppImage:
+#
+#   Install            (--install)   the installer path: the payload is copied out
+#       of the read-only mount to ${XDG_DATA_HOME:-~/.local/share}/DPIGate/<version>/,
+#       install.sh --no-build runs from that copy (setcap, firewall rules, menu
+#       entry, optional start at login), and the tray is started. Later launches
+#       of the same version only start the installed tray.
+#
+#   Run without installing   (--portable)   nothing is installed and nothing is
+#       left behind. One password prompt starts a root helper that runs the
+#       engine from a root-owned temporary copy under /run (the AppImage mount
+#       is nosuid, so setcap cannot work there, and root cannot enter a user's
+#       FUSE mount). The tray runs as the user straight from the AppImage.
+#       When the tray exits, however it exits, the helper removes the firewall
+#       rules, stops the engine and deletes its directory. Settings live next to
+#       the AppImage in <AppImage file name>.config/ (~/.config/DPIGate when that
+#       cannot be written).
+#
+# Started with no flag: an installed copy of this version just opens its tray;
+# otherwise a dialog (a text prompt in a terminal) asks which of the two to do.
 #
 # The AppImage does not contain libnetfilter_queue, libnfnetlink or libmnl, and
-# it does not contain the tray's GTK / AyatanaAppIndicator stack. Before
-# anything is copied or installed, AppRun checks for them and, if they are
-# missing, installs the runtime packages through linux/lib/platform.sh's
-# plat_deps_install (the distribution's package manager, one password prompt).
-# The libraries are required: if they cannot be installed AppRun names the
-# packages and exits 1. The tray is optional: if its packages cannot be
-# installed, the install continues and a warning is printed.
+# not the tray's GTK / AyatanaAppIndicator stack. AppRun checks for them first
+# and installs missing runtime packages through linux/lib/platform.sh's
+# plat_deps_install (the distribution's package manager) with ONE password
+# prompt: the install path hands the password to install.sh, the portable path
+# installs the packages inside the single root call that also starts the helper.
+# The libraries are required. The tray is optional for an install (a warning is
+# printed) and required for running without installing: an engine nobody can
+# stop must not run.
 #
 # Usage:
-#   AppRun                      first run: check, copy + install; later: start the tray
-#   AppRun --install [flags]    copy and install again; flags go to install.sh
+#   AppRun                      installed: start the tray; else ask: install or run without installing
+#   AppRun --install [flags]    copy and install (again); flags go to install.sh
+#   AppRun --portable           run without installing
 #   AppRun --uninstall          run the installed uninstall.sh
 #   AppRun --help
 #
-# Any flag this script does not know is passed to install.sh, and passing one
-# implies an install step, e.g. --system --start --autostart --no-autostart
-# --no-shortcut --assume-deps --gui --cli --check-only.
+# Any other flag is passed to install.sh and implies an install step, e.g.
+# --system --start --autostart --no-autostart --no-shortcut --assume-deps --gui
+# --cli --check-only.
 # --assume-deps: do not install packages; missing libraries are still an error.
-# --no-tray skips starting the tray. --check-only never starts the tray and
-# skips the dependency step.
-# --dry-run (for testing) copies the payload but only prints the install and
-# tray steps. It never installs packages; the library check still runs.
+# --no-tray skips starting the tray (install only). --check-only never starts the
+# tray and skips the dependency step.
+# --dry-run (for testing) only prints the steps. With no other flag it follows the
+# install path (it copies the payload but does not run install.sh) and never
+# installs packages; the library check still runs. With --portable it creates
+# nothing at all.
 #
-# Never run as root: install.sh and the tray must run as the user, and
-# install.sh asks for root itself when it needs it.
+# Never run as root: the tray and install.sh run as the user and ask for root
+# themselves when they need it.
 
-set -eu
+set -e
 
 APP_NAME="DPIGate"
 
@@ -46,20 +63,6 @@ VERSION="$(cat "$HERE/VERSION" 2>/dev/null || true)"
 # Shared objects the daemon links against, by SONAME, from the host.
 RUNTIME_LIBS="libnetfilter_queue.so.1 libnfnetlink.so.0 libmnl.so.0"
 
-# tray.py tries AyatanaAppIndicator3 0.1, then AppIndicator3 0.1, and needs
-# GTK 3.0. This probe checks the same typelibs; exit 0 when the tray can load.
-TRAY_PROBE='import gi, importlib, sys
-gi.require_version("Gtk", "3.0")
-importlib.import_module("gi.repository.Gtk")
-for name in ("AyatanaAppIndicator3", "AppIndicator3"):
-    try:
-        gi.require_version(name, "0.1")
-        importlib.import_module("gi.repository." + name)
-        sys.exit(0)
-    except (ImportError, ValueError):
-        pass
-sys.exit(1)'
-
 say() { printf '[AppRun] %s\n' "$*" >&2; }
 die() { say "ERROR: $*"; exit 1; }
 
@@ -68,19 +71,31 @@ usage() {
 DPIGate AppImage
 
 Usage:
-  AppRun                      first run: check, copy and install; later runs: start the tray
-  AppRun --install [flags]    copy and install again; flags are passed to install.sh
-  AppRun --uninstall          remove DPIGate (runs the installed uninstall.sh)
+  AppRun                      installed: open the tray; not installed: ask whether
+                              to install or to run without installing
+  AppRun --install [flags]    install (copy to ~/.local/share/DPIGate, setcap,
+                              menu entry); flags are passed to install.sh
+  AppRun --portable           run without installing: nothing is installed, nothing
+                              is left behind; one password prompt; the bypass stops
+                              when you choose Exit in the tray
+  AppRun --uninstall          remove an installed DPIGate (runs the installed uninstall.sh)
   AppRun --help               show this help
 
-Runtime packages: libnetfilter_queue, libnfnetlink and libmnl are required and
-are installed with the package manager if missing (one password prompt). The
-tray packages (python3 with GTK 3 and AyatanaAppIndicator3 or AppIndicator3)
-are installed too; if that fails the bypass still installs, without the icon.
-The compiler and -dev packages are never installed. Use --assume-deps to skip
-installing packages; then missing libraries are reported and AppRun exits 1.
+Run without installing: settings (ProgramFilters, DNS and bypass choices) are kept in
+<AppImage file name>.config/ next to the AppImage, or in ~/.config/DPIGate when that
+folder cannot be written. DNS and "Bypass All Traffic" choices made in the tray are
+saved and take effect the next time DPIGate is started. Only one DPIGate tray (installed
+or not) can run at a time.
 
-install.sh flags (passed through):
+Runtime packages: libnetfilter_queue, libnfnetlink and libmnl are required and
+are installed with the package manager if missing, with one password prompt.
+The tray packages (python3 with GTK 3 and AyatanaAppIndicator3 or AppIndicator3)
+are installed too. For an install a missing tray only produces a warning; for
+running without installing it is an error. The compiler and -dev packages are never
+installed. Use --assume-deps to skip installing packages; then missing libraries are
+reported and AppRun exits 1.
+
+install.sh flags (install path only, passed through):
   --system        install as a root/system service (systemd, OpenRC or runit)
   --start         also start goodbyedpi now
   --autostart     start the tray (and the bypass) at login
@@ -91,15 +106,16 @@ install.sh flags (passed through):
   --check-only    probe the system only; installs nothing
 
 AppRun flags:
-  --no-tray       do not start the tray after the install step
-  --dry-run       testing: copy the payload, print the install and tray steps only
+  --no-tray       do not start the tray after the install step (install only)
+  --dry-run       testing: print the steps; copies the payload on the install path only
 
-The AppImage never runs as root. install.sh and AppRun use sudo, doas, pkexec
-or run0 themselves when they need root.
+The AppImage never runs as root. It uses sudo, doas, pkexec or run0 itself when it
+needs root.
 EOF
 }
 
 # ── Arguments ───────────────────────────────────────────────────────────────
+MODE=""             # install | portable | run (installed copy), decided below
 MODE_INSTALL=0      # run install.sh (--install or any install option)
 FORCE_COPY=0        # copy the payload again (--install only)
 DO_UNINSTALL=0
@@ -107,11 +123,14 @@ NO_TRAY=0
 DRY_RUN=0
 CHECK_ONLY=0
 ASSUME_DEPS=0
+WANT_PORTABLE=0
+WANT_INSTALL=0
 INSTALL_ARGS=()
 for arg in "$@"; do
     case "$arg" in
         -h|--help)   usage; exit 0 ;;
-        --install)   MODE_INSTALL=1; FORCE_COPY=1 ;;
+        --install)   WANT_INSTALL=1; MODE_INSTALL=1; FORCE_COPY=1 ;;
+        --portable)  WANT_PORTABLE=1 ;;
         --uninstall) DO_UNINSTALL=1 ;;
         --no-tray)   NO_TRAY=1 ;;
         --dry-run)   DRY_RUN=1 ;;
@@ -126,7 +145,7 @@ done
 # Real uid, not an environment variable: a caller cannot set this away.
 if [ "$(id -u)" -eq 0 ]; then
     die "do not run the DPIGate AppImage as root. Run it as your normal user;
-       install.sh asks for root (sudo/doas/pkexec/run0) when it needs it."
+       it asks for root (sudo/doas/pkexec/run0) when it needs it."
 fi
 
 [ -n "$VERSION" ] || die "VERSION file missing from the AppImage payload"
@@ -136,7 +155,7 @@ DATA_DIR="$DATA_ROOT"                  # where install.sh puts the runtime files
 DEST="$DATA_ROOT/$VERSION"             # the payload copy this AppRun installs from
 
 if [ "$DO_UNINSTALL" -eq 1 ]; then
-    if [ "${#INSTALL_ARGS[@]}" -gt 0 ] || [ "$MODE_INSTALL" -eq 1 ]; then
+    if [ "${#INSTALL_ARGS[@]}" -gt 0 ] || [ "$WANT_INSTALL" -eq 1 ] || [ "$WANT_PORTABLE" -eq 1 ]; then
         die "--uninstall cannot be combined with install options"
     fi
     if [ ! -x "$DATA_DIR/uninstall.sh" ]; then
@@ -150,13 +169,178 @@ if [ "$DO_UNINSTALL" -eq 1 ]; then
     exec bash "$DATA_DIR/uninstall.sh"
 fi
 
-# Any install option means an install step is wanted.
-if [ "${#INSTALL_ARGS[@]}" -gt 0 ]; then
+# ── Which mode? ─────────────────────────────────────────────────────────────
+if [ "$WANT_PORTABLE" -eq 1 ]; then
+    if [ "$WANT_INSTALL" -eq 1 ] || [ "${#INSTALL_ARGS[@]}" -gt 0 ]; then
+        die "--portable cannot be combined with --install or install options (${INSTALL_ARGS[*]:-})"
+    fi
+    [ "$NO_TRAY" -eq 0 ] || die "--portable needs the tray: it is the only way to stop the bypass"
+    MODE=portable
+elif [ "$WANT_INSTALL" -eq 1 ] || [ "${#INSTALL_ARGS[@]}" -gt 0 ]; then
+    MODE=install
     MODE_INSTALL=1
+elif [ -f "$DEST/.installed" ]; then
+    MODE=run
+elif [ "$DRY_RUN" -eq 1 ]; then
+    MODE=install          # a dry run follows the install path unless told otherwise
+else
+    MODE=""               # not installed and nothing said: ask below
 fi
 
+# ── Probes shared by every mode ─────────────────────────────────────────────
+# python3 -I: the user's PYTHONPATH and the current directory are not searched.
+tray_ready() {
+    command -v python3 >/dev/null 2>&1 && python3 -I "$HERE/lib/tray-probe.py" >/dev/null 2>&1
+}
+
+# One tray per user. tray.py's own lock is what the tray takes; this only asks
+# (a shared, non-blocking probe, rc 0 = running) and never takes it.
+tray_running() {
+    [ -f "$HERE/tray.py" ] && command -v python3 >/dev/null 2>&1 \
+        && python3 -I "$HERE/tray.py" --check-running >/dev/null 2>&1
+}
+
+# Would this run start a tray? Then a running one means there is nothing to do.
+if [ "$NO_TRAY" -eq 0 ] && [ "$DRY_RUN" -eq 0 ] && [ "$CHECK_ONLY" -eq 0 ] && tray_running; then
+    say "$APP_NAME is already running (look for its tray icon); not starting a second one."
+    notify-send -a "$APP_NAME" "$APP_NAME" "Already running - look for the tray icon." >/dev/null 2>&1 || true
+    exit 0
+fi
+
+# ── Choose: install or run without installing ───────────────────────────────
+choose_mode() {
+    local have_gui=0 ans="" rc=0 i
+    if [ -n "${DISPLAY:-}" ] || [ -n "${WAYLAND_DISPLAY:-}" ]; then have_gui=1; fi
+
+    if [ -t 0 ] && [ -t 1 ]; then
+        # A person typed this in a terminal: ask in text (same rule as install.sh).
+        printf '%s is not installed.\n  1) Install                  (menu entry, setcap, optional start at login)\n  2) Run without installing   (nothing is left behind; stops when you Exit the tray)\n' "$APP_NAME" >&2
+        for i in 1 2 3; do
+            ans=""
+            printf 'Choose [1/2, Enter to cancel]: ' >&2
+            read -r ans || ans=""
+            case "$ans" in
+                1) MODE=install; return 0 ;;
+                2) MODE=portable; return 0 ;;
+                "") say "cancelled; nothing was changed."; exit 0 ;;
+            esac
+        done
+        say "no valid choice; nothing was changed."
+        exit 0
+    fi
+
+    if [ "$have_gui" -eq 1 ] && command -v zenity >/dev/null 2>&1; then
+        rc=0
+        ans="$(zenity --list --radiolist --title="$APP_NAME" --width=560 --height=300 \
+            --text="DPIGate is not installed. What do you want to do?" \
+            --column="" --column="id" --column="Choice" --hide-column=2 --print-column=2 \
+            --ok-label="Continue" --cancel-label="Cancel" \
+            TRUE install "Install (menu entry, setcap, optional start at login)" \
+            FALSE portable "Run without installing (nothing is left behind; stops when you Exit the tray)" \
+            2>/dev/null)" || rc=$?
+        if [ "$rc" -eq 0 ]; then
+            case "$ans" in
+                install)  MODE=install;  return 0 ;;
+                portable) MODE=portable; return 0 ;;
+            esac
+            say "cancelled; nothing was changed."; exit 0
+        fi
+        if [ "$rc" -eq 1 ]; then say "cancelled; nothing was changed."; exit 0; fi
+        # zenity itself failed (rc other than OK/Cancel): try the next way.
+    fi
+    if [ "$have_gui" -eq 1 ] && command -v python3 >/dev/null 2>&1 \
+       && python3 -I -c 'import gi; gi.require_version("Gtk","3.0"); from gi.repository import Gtk' >/dev/null 2>&1; then
+        rc=0
+        ans="$(python3 -I - <<'PYEOF' 2>/dev/null
+import gi
+gi.require_version("Gtk", "3.0")
+from gi.repository import Gtk
+d = Gtk.MessageDialog(message_type=Gtk.MessageType.QUESTION,
+                      text="DPIGate is not installed. What do you want to do?")
+d.set_title("DPIGate")
+d.add_button("Cancel", 0)
+d.add_button("Run without installing", 2)
+d.add_button("Install", 1)
+r = d.run()
+print({1: "install", 2: "portable"}.get(r, "cancel"))
+PYEOF
+)" || rc=$?
+        if [ "$rc" -eq 0 ]; then
+            case "$ans" in
+                install)  MODE=install;  return 0 ;;
+                portable) MODE=portable; return 0 ;;
+            esac
+            say "cancelled; nothing was changed."; exit 0
+        fi
+    fi
+    if [ "$have_gui" -eq 1 ]; then
+        # A display but nothing that can ask: keep today's behavior, the install.
+        say "no dialog tool (zenity or python3 with GTK 3) to ask with; installing (use --portable to run without installing)"
+        notify-send -a "$APP_NAME" "$APP_NAME" "Installing. To run without installing, start with --portable." >/dev/null 2>&1 || true
+        MODE=install
+        return 0
+    fi
+    say "no terminal and no display: cannot ask. Run with --install or --portable."
+    exit 2
+}
+
+if [ -z "$MODE" ]; then
+    choose_mode
+    if [ "$MODE" = install ]; then MODE_INSTALL=1; fi
+    if [ "$MODE" = portable ] && [ "$NO_TRAY" -eq 1 ]; then
+        die "running without installing needs the tray: it is the only way to stop the bypass"
+    fi
+fi
+
+# ── Settings directory of the portable mode ─────────────────────────────────
+# <AppImage file>.config/ next to the AppImage ($APPIMAGE is set by the AppImage
+# runtime); the user's ~/.config/DPIGate when that cannot be written.
+resolve_cfg_dir() {
+    local d
+    if [ -n "${APPIMAGE:-}" ] && [ -f "$APPIMAGE" ]; then
+        d="${APPIMAGE}.config"
+        if { [ -d "$d" ] || mkdir -p "$d" 2>/dev/null; } && [ -w "$d" ] && [ -x "$d" ]; then
+            printf '%s' "$d"
+            return 0
+        fi
+        say "WARNING: cannot write $d; keeping the settings in ${XDG_CONFIG_HOME:-$HOME/.config}/DPIGate" >&2
+    fi
+    printf '%s' "${XDG_CONFIG_HOME:-$HOME/.config}/DPIGate"
+}
+
+# ── Load platform.sh once, in THIS shell ────────────────────────────────────
+# One shell means a password cached by plat_root_acquire stays available for
+# every later root step (it used to be asked again for each subshell).
+# The portable mode must leave nothing under ~: its log goes into the temporary
+# staging directory, or nowhere in a dry run.
+STAGE=""
+cleanup() {
+    if [ -n "$STAGE" ] && [ -d "$STAGE" ]; then rm -rf -- "$STAGE"; fi
+}
+trap cleanup EXIT
+
+if [ "$MODE" = portable ]; then
+    if [ "$DRY_RUN" -eq 1 ]; then
+        PLAT_LOG=/dev/null
+    else
+        if [ -n "${XDG_RUNTIME_DIR:-}" ] && [ -d "$XDG_RUNTIME_DIR" ] && [ -O "$XDG_RUNTIME_DIR" ] && [ -w "$XDG_RUNTIME_DIR" ]; then
+            _stage_base="$XDG_RUNTIME_DIR"
+        else
+            _stage_base="${TMPDIR:-/tmp}"
+        fi
+        STAGE="$(mktemp -d "$_stage_base/dpigate-stage.XXXXXX")" || die "cannot create a private staging directory in $_stage_base"
+        chmod 0700 "$STAGE"
+        PLAT_LOG="$STAGE/platform.log"
+    fi
+    export PLAT_LOG
+fi
+# shellcheck disable=SC1091
+. "$HERE/lib/platform.sh" || die "cannot load lib/platform.sh from the AppImage"
+PLAT_DEPS_RUNTIME_ONLY=1
+
 # ── Runtime dependencies ────────────────────────────────────────────────────
-# Missing NFQ libraries: a required dependency. Missing tray: optional.
+# Missing NFQ libraries: a required dependency. Missing tray: optional for an
+# install, required for running without installing.
 
 # Prints the sonames from RUNTIME_LIBS that ldconfig does not list.
 nfq_missing() {
@@ -175,7 +359,7 @@ nfq_missing() {
 
 # Runtime package names for this distribution (from platform.sh's table).
 nfq_packages() {
-    ( set +eu; . "$HERE/lib/platform.sh" >/dev/null 2>&1 && _plat_nfq_req_for "$(plat_pkgmgr)" ) 2>/dev/null || true
+    _plat_nfq_req_for "$(plat_pkgmgr)" 2>/dev/null || true
 }
 
 # Names the packages, then exits 1. $1 = missing sonames.
@@ -192,25 +376,35 @@ report_nfq_missing() {
     exit 1
 }
 
-tray_ready() {
-    command -v python3 >/dev/null 2>&1 && python3 -I -c "$TRAY_PROBE" >/dev/null 2>&1
+report_tray_missing() {
+    say "The tray needs python3 with PyGObject and GTK 3, plus AyatanaAppIndicator3 or AppIndicator3."
 }
 
-# plat_deps_install through platform.sh, in a subshell so its settings (set -u
-# is not compatible with it) cannot leak into this script. $1 = role (nfq|tray).
-# rc 0 ok; rc 2 the user declined the password prompt; other rc = failed.
-platform_install() {
-    local rc=0
-    ( set +eu
-      . "$HERE/lib/platform.sh" || exit 1
-      PLAT_DEPS_RUNTIME_ONLY=1
-      plat_root_acquire || exit $?
-      plat_deps_install "$1" ) || rc=$?
-    return "$rc"
+# Installs the packages of the roles in $1 ("nfq", "tray" or "nfq tray") with ONE
+# root session. Returns 0 done/attempted, 2 the user declined the prompt.
+install_runtime_packages() {
+    local roles="$1" role rc=0
+    case "$roles" in
+        "nfq tray") role=appimage ;;
+        nfq)        role=nfq ;;
+        tray)       role=tray ;;
+        *)          return 0 ;;
+    esac
+    plat_root_acquire || rc=$?
+    if [ "$rc" -eq 2 ]; then return 2; fi
+    if [ "$rc" -ne 0 ]; then say "no way to become root (sudo/doas/pkexec/run0 unusable)"; return 0; fi
+    rc=0
+    plat_deps_install "$role" || rc=$?
+    if [ "$rc" -eq 2 ]; then return 2; fi
+    if [ "$rc" -ne 0 ]; then say "package installation did not complete (rc=$rc)"; fi
+    return 0
 }
 
+# Install and run paths install packages here. For MODE=portable this only sets
+# NEED_PORTABLE_ROLES: the root helper installs them in its single root call.
+NEED_PORTABLE_ROLES=""
 check_runtime_deps() {
-    local missing rc pkgs
+    local missing pkgs roles="" rc=0
     missing="$(nfq_missing)"
     if [ -n "$missing" ]; then
         pkgs="$(nfq_packages)"
@@ -222,47 +416,172 @@ check_runtime_deps() {
             say "--assume-deps: not installing packages"
             report_nfq_missing "$missing"
         fi
-        say "runtime libraries missing:$missing; installing through the package manager"
-        rc=0
-        platform_install nfq || rc=$?
+        roles="nfq"
+    fi
+    if ! tray_ready; then
+        if [ "$DRY_RUN" -eq 1 ]; then
+            say "would install the tray packages (python3 GTK 3 and AyatanaAppIndicator3 or AppIndicator3)"
+        elif [ "$ASSUME_DEPS" -eq 0 ]; then
+            roles="${roles:+$roles }tray"
+        fi
+    fi
+
+    if [ "$MODE" = portable ]; then
+        NEED_PORTABLE_ROLES="$roles"
+        return 0
+    fi
+
+    if [ -n "$roles" ]; then
+        if [ -n "$missing" ]; then
+            say "runtime libraries missing:$missing; installing through the package manager"
+        else
+            say "tray packages missing; installing through the package manager"
+        fi
+        install_runtime_packages "$roles" || rc=$?
         if [ "$rc" -eq 2 ]; then
             say "package installation was declined; nothing was installed"
-            report_nfq_missing "$missing"
-        fi
-        if [ "$rc" -ne 0 ]; then
-            say "package installation failed (rc=$rc)"
+            if [ -n "$missing" ]; then report_nfq_missing "$missing"; fi
+            die "cancelled: the password prompt was declined"
         fi
         missing="$(nfq_missing)"
         if [ -n "$missing" ]; then
             report_nfq_missing "$missing"
         fi
-        say "runtime libraries installed"
+        case " $roles " in *" nfq "*) say "runtime libraries installed" ;; esac
     fi
 
-    if tray_ready; then
+    if tray_ready || [ "$DRY_RUN" -eq 1 ]; then
         return 0
     fi
-    if [ "$DRY_RUN" -eq 1 ]; then
-        say "would install the tray packages (python3 GTK 3 and AyatanaAppIndicator3 or AppIndicator3)"
-        return 0
-    fi
-    if [ "$ASSUME_DEPS" -eq 0 ]; then
-        say "tray packages missing; installing through the package manager"
-        rc=0
-        platform_install tray || rc=$?
-        [ "$rc" -eq 0 ] || say "tray package installation did not complete (rc=$rc)"
-    fi
-    if ! tray_ready; then
-        say "WARNING: the tray is not available. It needs python3 with PyGObject and GTK 3,"
-        say "         plus AyatanaAppIndicator3 or AppIndicator3. The bypass is installed"
-        say "         without the tray icon; install those packages and run AppRun again."
-    fi
+    say "WARNING: the tray is not available. It needs python3 with PyGObject and GTK 3,"
+    say "         plus AyatanaAppIndicator3 or AppIndicator3. The bypass is installed"
+    say "         without the tray icon; install those packages and run AppRun again."
     return 0
 }
 
 if [ "$CHECK_ONLY" -eq 0 ]; then
     check_runtime_deps
 fi
+
+# ════════════════════════════════════════════════════════════════════════════
+# Run without installing
+# ════════════════════════════════════════════════════════════════════════════
+
+# $1 = exit status of the root call; explains it and exits.
+portable_failed() {
+    local rc="$1"
+    if [ "$rc" -eq 2 ]; then
+        say "the password prompt was cancelled; nothing was changed."
+        exit 0
+    fi
+    if [ -s "$STAGE/platform.log" ]; then
+        say "details:"
+        tail -n 25 "$STAGE/platform.log" >&2 || true
+    fi
+    case "$rc" in
+        10) report_nfq_missing "$(nfq_missing)" ;;
+        11) report_tray_missing; die "the bypass will not run without a tray" ;;
+        12) die "the payload checksum did not match; refusing to run it as root" ;;
+        13) die "no root-owned directory that can run programs (/run and /dev/shm are both unusable)" ;;
+        15) die "a previous DPIGate session is still shutting down; try again in a few seconds" ;;
+        *)  die "the root helper failed (exit $rc)" ;;
+    esac
+}
+
+portable_main() {
+    local uid cfg tarsum nonce rd_candidates c state="" esc_pid="" rc=0 waited=0
+    local roles="$NEED_PORTABLE_ROLES"
+    uid="$(id -u)"
+
+    cfg="$(resolve_cfg_dir)"
+    if [ "$DRY_RUN" -eq 1 ]; then
+        say "would run without installing: settings in $cfg"
+        say "would stage the payload, ask for root ONCE (installing: ${roles:-nothing}), start the root helper"
+        say "would start: $HERE/tray-launcher.sh --portable"
+        exit 0
+    fi
+
+    if [ -z "${DISPLAY:-}" ] && [ -z "${WAYLAND_DISPLAY:-}" ]; then
+        die "--portable needs a graphical session: the tray is the only way to stop the bypass"
+    fi
+    if [ "$ASSUME_DEPS" -eq 1 ] && ! tray_ready; then
+        report_tray_missing
+        die "tray packages are missing and --assume-deps does not install them; the bypass will not run without a tray"
+    fi
+
+    # Settings (user side): the directory and the default ProgramFilters.
+    mkdir -p "$cfg" 2>/dev/null || die "cannot create the settings directory $cfg"
+    if [ ! -e "$cfg/ProgramFilters" ] && [ -f "$HERE/ProgramFilters" ]; then
+        cp "$HERE/ProgramFilters" "$cfg/ProgramFilters" || die "cannot write $cfg/ProgramFilters"
+    fi
+
+    # The payload as ONE tar file and its SHA-256, computed from the read-only
+    # AppImage mount. Root copies the tarball into its own directory and refuses
+    # to run it unless the copy still has this checksum (see portable-bootstrap.sh).
+    tar -C "$HERE" -cf "$STAGE/payload.tar" . || die "cannot pack the payload"
+    tarsum="$(sha256sum "$STAGE/payload.tar" | cut -d' ' -f1)"
+    [ -n "$tarsum" ] || die "cannot compute the payload checksum"
+    nonce="$$.$RANDOM$RANDOM"
+
+    # ONE escalation: the password prompt (sudo: asked here once, then reused;
+    # pkexec/run0: the call below asks) and then a single root call that installs
+    # the packages, starts the engine and keeps watching THIS process. AppRun
+    # becomes the tray with exec below, so $$ is the tray's PID; if AppRun dies
+    # first, the helper tears everything down by itself.
+    rc=0
+    plat_root_acquire || rc=$?
+    if [ "$rc" -eq 2 ]; then
+        say "the password prompt was cancelled; nothing was changed."
+        exit 0
+    fi
+    [ "$rc" -eq 0 ] || die "no way to become root (sudo, doas, pkexec and run0 are all unusable)"
+
+    say "starting the engine${roles:+ (installing packages: $roles)}; this can take a while..."
+    ( plat_run_root bash -c "$(cat "$HERE/portable-bootstrap.sh")" dpigate-boot \
+          "$uid" "$$" "$STAGE/payload.tar" "$tarsum" "$roles" "$cfg" "$nonce" ) </dev/null >/dev/null 2>&1 &
+    esc_pid=$!
+
+    rd_candidates="${DPIGATE_TEST_BASE:+$DPIGATE_TEST_BASE/$uid/data/state} /run/dpigate/$uid/data/state /dev/shm/dpigate/$uid/data/state"
+    c=""
+    while :; do
+        for c in $rd_candidates; do
+            if [ -f "$c" ]; then
+                state="$(cat "$c" 2>/dev/null || true)"
+                case "$state" in "ready "*" $nonce") break 2 ;; esac
+            fi
+        done
+        if ! kill -0 "$esc_pid" 2>/dev/null; then
+            rc=0
+            wait "$esc_pid" || rc=$?
+            portable_failed "$rc"
+        fi
+        sleep 0.5
+        waited=$((waited + 1))
+        if [ "$waited" -gt 1800 ]; then
+            die "the engine did not come up within 15 minutes"
+        fi
+    done
+    # c = the state file that matched: its directory is the helper's data dir.
+    PORTABLE_DATA_DIR="$(dirname "$c")"
+
+    say "engine running (pid $(echo "$state" | cut -d' ' -f2)); opening the tray. Choose Exit in the tray to stop the bypass."
+    rm -rf -- "$STAGE"
+    STAGE=""
+    trap - EXIT
+    unset SUDO_PASSWORD
+    export GDPI_PORTABLE=1 GDPI_DATA_DIR="$PORTABLE_DATA_DIR" GDPI_CONFIG_DIR="$cfg"
+    # The tray's platform.sh logs nowhere: nothing may appear under ~/.local/share.
+    export PLAT_LOG=/dev/null PYTHONDONTWRITEBYTECODE=1
+    exec bash "$HERE/tray-launcher.sh" --portable
+}
+
+if [ "$MODE" = portable ]; then
+    portable_main
+fi
+
+# ════════════════════════════════════════════════════════════════════════════
+# Install / installed
+# ════════════════════════════════════════════════════════════════════════════
 
 # ── Step 1: copy the payload out of the (read-only) AppImage mount ──────────
 copy_payload() {
@@ -303,7 +622,10 @@ if [ "$MODE_INSTALL" -eq 1 ] || [ ! -f "$DEST/.installed" ]; then
         say "would run: bash $DEST/install.sh --no-build ${INSTALL_ARGS[*]:-}"
     else
         say "running install.sh from $DEST"
-        if ! bash "$DEST/install.sh" --no-build ${INSTALL_ARGS[@]+"${INSTALL_ARGS[@]}"}; then
+        # SUDO_PASSWORD (a shell variable, not exported) goes to install.sh as an
+        # environment prefix, which install.sh and the wizard accept: the password
+        # asked for above is not asked again.
+        if ! SUDO_PASSWORD="${SUDO_PASSWORD:-}" bash "$DEST/install.sh" --no-build ${INSTALL_ARGS[@]+"${INSTALL_ARGS[@]}"}; then
             die "install.sh failed. Nothing is marked as installed; run AppRun again after fixing the reported problem."
         fi
         if [ "$CHECK_ONLY" -eq 1 ]; then
@@ -326,6 +648,7 @@ if [ "$DRY_RUN" -eq 1 ]; then
     exit 0
 fi
 [ -x "$DATA_DIR/tray-launcher.sh" ] || die "$DATA_DIR/tray-launcher.sh is missing; install step did not complete"
+unset SUDO_PASSWORD
 setsid "$DATA_DIR/tray-launcher.sh" </dev/null >/dev/null 2>&1 &
 disown 2>/dev/null || true
 say "tray started"

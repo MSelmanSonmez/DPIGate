@@ -6,3 +6,8 @@ Exec=AppRun %U
 Icon=dpigate
 Terminal=false
 Categories=Network;
+Actions=Portable;
+
+[Desktop Action Portable]
+Name=Run without installing
+Exec=AppRun --portable
