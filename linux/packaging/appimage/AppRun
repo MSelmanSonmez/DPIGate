@@ -499,6 +499,26 @@ portable_failed() {
     esac
 }
 
+# Exit status 3: an engine that is not ours is already running. Taking it over would
+# stop it (start.sh --restart) and then shut it down when the tray exits.
+portable_refuse_foreign_engine() {
+    local pid argv0 ours_a="/run/dpigate/" ours_b="/dev/shm/dpigate/" ours_t="${DPIGATE_TEST_BASE:-/nonexistent-}/"
+    if command -v systemctl >/dev/null 2>&1 && systemctl is-active --quiet goodbyedpi.service 2>/dev/null; then
+        say "ERROR: the DPIGate system service (goodbyedpi.service) is running, so it already owns the engine and"
+        say "       the firewall rules. Stop it first (sudo systemctl stop goodbyedpi) or use the installed DPIGate."
+        exit 3
+    fi
+    for pid in $(plat_gdpi_pids); do
+        argv0="$(tr '\0' '\n' < "/proc/$pid/cmdline" 2>/dev/null | head -n 1)"
+        case "$argv0" in
+            "$ours_a"*|"$ours_b"*|"$ours_t"*) continue ;;   # left by a dead earlier portable session: taken over
+        esac
+        say "ERROR: another goodbyedpi engine is already running (pid $pid, ${argv0:-unknown path})."
+        say "       Stop it first (its tray's Exit, 'sudo systemctl stop goodbyedpi', or kill.sh), then try again."
+        exit 3
+    done
+}
+
 portable_main() {
     local uid cfg tarball tarsum nonce rd_candidates c state="" esc_pid="" rc=0 waited=0
     local roles="$NEED_PORTABLE_ROLES"
@@ -512,6 +532,7 @@ portable_main() {
         exit 0
     fi
 
+    portable_refuse_foreign_engine
     if [ -z "${DISPLAY:-}" ] && [ -z "${WAYLAND_DISPLAY:-}" ]; then
         die "--portable needs a graphical session: the tray is the only way to stop the bypass"
     fi
