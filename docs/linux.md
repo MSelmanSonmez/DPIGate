@@ -169,7 +169,13 @@ the tray. Later launches of the same version only start the tray. A newer AppIma
 copies and installs its own version; the older `<version>/` folders are not removed
 automatically. Right-click the tray icon and choose Uninstall, run `--uninstall`, or run
 `~/.local/share/DPIGate/uninstall.sh` to remove it. A running DPIGate tray blocks a new
-start (including a reinstall with `--install`): choose Exit in the tray first.
+start (including a reinstall with `--install`): choose Exit in the tray first. When the
+graphical installer's "Launch DPIGate when setup finishes" box is ticked (it is by default)
+the installer starts DPIGate and AppRun does not start a second tray. A second tray that is
+started anyway (autostart plus the menu entry, say) exits with status 75 and leaves the
+running one, its engine and its firewall rules alone. The installer's "Install a
+system-wide service (advanced)" box is off by default; ticking it (or `--system`) installs
+to `/usr/local/lib/DPIGate` and `/etc/systemd/system/goodbyedpi.service` and enables the unit.
 
 #### Run without installing
 
