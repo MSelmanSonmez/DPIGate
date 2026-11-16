@@ -425,8 +425,8 @@ cmd_status() {
   if svc=$(default_service 2>/dev/null); then
     echo "service: $svc"
     echo "socks:   $(ns -getsocksfirewallproxy "$svc" 2>&1 | awk '$1=="Enabled:"{e=$2} $1=="Server:"{s=$2} $1=="Port:"{p=$2} END{print "enabled=" e " server=" s " port=" p}')"
-    for g in getwebproxy getsecurewebproxy; do
-      echo "$g: $(ns -$g "$svc" 2>&1 | awk '$1=="Enabled:"{e=$2} $1=="Server:"{s=$2} $1=="Port:"{p=$2} END{print "enabled=" e " server=" s " port=" p}')"
+    for g in web secureweb; do
+      echo "$g:$(printf '%*s' $((8 - ${#g})) '')$(ns -get${g}proxy "$svc" 2>&1 | awk '$1=="Enabled:"{e=$2} $1=="Server:"{s=$2} $1=="Port:"{p=$2} END{print "enabled=" e " server=" s " port=" p}')"
     done
     echo "env:     HTTPS_PROXY=$("$LAUNCHCTL" getenv HTTPS_PROXY </dev/null 2>&1) HTTP_PROXY=$("$LAUNCHCTL" getenv HTTP_PROXY </dev/null 2>&1)"
     echo "dns:     $(ns -getdnsservers "$svc" 2>&1 | tr '\n' ' ' | sed 's/ *$//')"
