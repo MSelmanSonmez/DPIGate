@@ -33,6 +33,97 @@ import stat
 import subprocess
 import fcntl
 
+# ── Single instance (one tray per user) ─────────────────────────────────────
+# Defined before the GTK import so `tray.py --check-running` works on a host
+# that has no PyGObject yet (AppRun asks before it installs anything).
+_instance_lock = None   # the open lock file; kept for the life of the process
+
+
+def _lock_dir(create):
+    """Directory holding the lock file, or None when there is no usable one.
+
+    $XDG_RUNTIME_DIR (a per-user 0700 directory) when set; otherwise a private
+    directory under /tmp that must be owned by this user and closed to others.
+    Never raises: a host where none of this works runs without the lock."""
+    runtime = os.environ.get("XDG_RUNTIME_DIR", "")
+    if runtime and os.path.isdir(runtime):
+        return runtime
+    base = os.path.join("/tmp", "dpigate-%d" % os.getuid())
+    try:
+        if create:
+            try:
+                os.mkdir(base, 0o700)
+            except FileExistsError:
+                pass
+        st = os.lstat(base)
+    except OSError:
+        return None
+    if (not stat.S_ISDIR(st.st_mode) or st.st_uid != os.getuid()
+            or stat.S_IMODE(st.st_mode) & 0o077):
+        return None
+    return base
+
+
+def _tray_running():
+    """True when another DPIGate tray of this user holds the lock.
+
+    A shared, non-blocking probe on the lock file: it never takes the lock
+    itself, so it cannot make a starting tray think it is a duplicate."""
+    base = _lock_dir(False)
+    if base is None:
+        return False
+    try:
+        fd = os.open(os.path.join(base, "dpigate-tray.lock"), os.O_RDONLY)
+    except OSError:
+        return False
+    try:
+        fcntl.flock(fd, fcntl.LOCK_SH | fcntl.LOCK_NB)
+    except BlockingIOError:
+        return True
+    except OSError:
+        return False
+    finally:
+        os.close(fd)
+    return False
+
+
+def _acquire_single_instance():
+    """True when this process is the only DPIGate tray for this user.
+
+    The lock is an flock(2) on a file in $XDG_RUNTIME_DIR. The kernel releases
+    it when the holder exits, however it exits, so a crashed tray cannot leave
+    a stale lock behind. The pid is not used for this. When the lock cannot be
+    set up at all (no usable directory, a read-only or full runtime dir, any
+    OSError) the tray runs without it and says so: a lost lock must not stop
+    the bypass from coming up."""
+    global _instance_lock
+    base = _lock_dir(True)
+    if base is None:
+        sys.stderr.write("[tray] no private lock directory; running without the single-instance lock\n")
+        return True
+    try:
+        fd = os.open(os.path.join(base, "dpigate-tray.lock"),
+                     os.O_RDWR | os.O_CREAT, 0o600)
+    except OSError as exc:
+        sys.stderr.write("[tray] cannot open the lock file (%s); running without the single-instance lock\n" % exc)
+        return True
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        os.close(fd)
+        return False
+    except OSError as exc:
+        os.close(fd)
+        sys.stderr.write("[tray] cannot lock the lock file (%s); running without the single-instance lock\n" % exc)
+        return True
+    _instance_lock = fd
+    return True
+
+
+if __name__ == "__main__" and "--check-running" in sys.argv[1:]:
+    # Exit 0 = a tray is running, 1 = none. Nothing else is imported or started.
+    sys.exit(0 if _tray_running() else 1)
+
 # ── Env config ──────────────────────────────────────────────────────────────
 def _env_int(name: str, default: int) -> int:
     """Env ints are attacker-adjacent (start.sh copies --force-dns straight
@@ -894,44 +985,6 @@ def build_menu():
 
     menu.show_all()
     return menu
-
-
-_instance_lock = None   # the open lock file; kept for the life of the process
-
-
-def _acquire_single_instance():
-    """True when this process is the only DPIGate tray for this user.
-
-    The lock is an flock(2) on a file in $XDG_RUNTIME_DIR (a per-user 0700
-    directory). The kernel releases it when the holder exits, however it
-    exits, so a crashed tray cannot leave a stale lock behind. The pid is not
-    used for this. If XDG_RUNTIME_DIR is unset, a private directory under the
-    temp dir is used; it must be owned by this user and not accessible to
-    others, otherwise no lock is taken and a warning is printed.
-    """
-    global _instance_lock
-    runtime = os.environ.get("XDG_RUNTIME_DIR", "")
-    if runtime and os.path.isdir(runtime):
-        base = runtime
-    else:
-        base = os.path.join("/tmp", "dpigate-%d" % os.getuid())
-        try:
-            os.mkdir(base, 0o700)
-        except FileExistsError:
-            pass
-        st = os.lstat(base)
-        if (not stat.S_ISDIR(st.st_mode) or st.st_uid != os.getuid()
-                or stat.S_IMODE(st.st_mode) & 0o077):
-            sys.stderr.write("[tray] %s is not a private directory; running without the single-instance lock\n" % base)
-            return True
-    fd = os.open(os.path.join(base, "dpigate-tray.lock"), os.O_RDWR | os.O_CREAT, 0o600)
-    try:
-        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-    except BlockingIOError:
-        os.close(fd)
-        return False
-    _instance_lock = fd
-    return True
 
 
 def main():
