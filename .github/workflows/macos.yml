@@ -1,0 +1,41 @@
+name: macOS
+
+on:
+  push:
+    paths:
+      - "macos/**"
+      - ".github/workflows/macos.yml"
+  pull_request:
+    paths:
+      - "macos/**"
+      - ".github/workflows/macos.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: build (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-13, macos-14]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Build the proxy
+        run: make -C macos all
+
+      - name: Run the tests
+        run: make -C macos test
+
+      - name: Build the release zip
+        run: make -C macos dist
+
+      - name: List the release zip
+        run: unzip -l macos/build/DPIGate-macos.zip
