@@ -45,6 +45,9 @@ echo "[build-appimage] version $VERSION"
 
 # ── 1. Build the daemon ─────────────────────────────────────────────────────
 BIN="$LINUX_DIR/goodbyedpi"
+# Relink from scratch: a binary left over from an earlier link (with other
+# flags) is not rebuilt by make when only the link command changed.
+rm -f "$BIN"
 make -C "$LINUX_DIR" -j"$(nproc 2>/dev/null || echo 1)" goodbyedpi
 [ -x "$BIN" ] || die "make did not produce $BIN"
 
