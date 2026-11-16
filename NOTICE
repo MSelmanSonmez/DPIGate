@@ -79,6 +79,7 @@ limitations under the License.
 The macOS port (macos/) bundles ByeDPI by hufrea
 (https://github.com/hufrea/byedpi), licensed under the MIT License
 (Copyright (c) 2024 hufrea; full text in macos/byedpi/LICENSE). The sources in
-macos/byedpi/ are unmodified upstream files (commit e268477, see
-macos/byedpi/UPSTREAM). macos/Makefile builds them into a universal SOCKS5
+macos/byedpi/ are upstream files (commit e268477, see macos/byedpi/UPSTREAM)
+except as noted there. Modified for DPIGate: macos/byedpi/proxy.c (name
+resolution now goes through the added macos/byedpi/dns_resolver.c/.h). macos/Makefile builds them into a universal SOCKS5
 proxy binary.

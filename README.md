@@ -146,6 +146,8 @@ macos/dpigate restore    # put the saved settings back after a crash or kill -9
 macos/dpigate status     # proxy state and current proxy/DNS settings
 ```
 
+The proxy resolves names itself (UDP DNS to 1.1.1.1, then 1.0.0.1, 1 s timeout, cached) so a stalled system resolver cannot freeze it; set `DPIGATE_DNS="ip ip"` to change the servers.
+
 `run` saves your previous proxy and DNS settings in `~/Library/Application Support/DPIGate/state` and restores them on exit. macOS may ask for an administrator password when settings change; the script never calls `sudo` itself. Flushing the DNS cache needs root, so on start macOS shows its own password dialog once; if you cancel it, `run` continues but the first page loads may be slow.
 
 ## How it works
