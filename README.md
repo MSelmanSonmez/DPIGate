@@ -32,6 +32,10 @@ domains in a site list.
 
 ![DPIGate on Linux](gif/linux.gif)
 
+**macOS** (experimental) — menu bar app, DNS choice with measured latency, site list and Auto Start.
+
+![DPIGate on macOS](gif/macos.gif)
+
 ---
 
 ## Why this fork
