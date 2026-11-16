@@ -131,7 +131,10 @@ _run_gui_wizard() {
     # 1. GTK Assistant (same PyGObject stack the tray already needs).
     if [ -f "$SCRIPT_DIR/installer-gui.py" ] && command -v python3 >/dev/null 2>&1 \
        && python3 -c 'import gi; gi.require_version("Gtk","3.0"); from gi.repository import Gtk' 2>/dev/null; then
-        exec python3 "$SCRIPT_DIR/installer-gui.py" --installer "$SCRIPT_DIR/install.sh" "${presets[@]}"
+        # plat_password_unexport made $SUDO_PASSWORD a shell-local variable, so
+        # hand it to the wizard explicitly (empty when the caller gave none):
+        # a password the caller already asked for must not be asked again.
+        SUDO_PASSWORD="${SUDO_PASSWORD:-}" exec python3 "$SCRIPT_DIR/installer-gui.py" --installer "$SCRIPT_DIR/install.sh" "${presets[@]}"
     fi
 
     # 2. zenity wizard — same page order, no PyGObject.

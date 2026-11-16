@@ -109,7 +109,7 @@ wizard_zenity_main() {
     # progress text so a stuck step is visible instead of a frozen pulse.
     local logfile; logfile="$(mktemp -t gdpi-install-XXXXXX.log)"
     (
-        GDPI_INSTALL_GUI=0 bash "$installer" "${args[@]}" 2>&1 | tee "$logfile"
+        SUDO_PASSWORD="${SUDO_PASSWORD:-}" GDPI_INSTALL_GUI=0 bash "$installer" "${args[@]}" 2>&1 | tee "$logfile"
         echo "${PIPESTATUS[0]}" > "$logfile.rc"
     ) | sed -u 's/^/# /' | zenity --progress --pulsate --auto-close --no-cancel \
             --title="$title" --width=520 \
