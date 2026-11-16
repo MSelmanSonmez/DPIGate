@@ -141,14 +141,16 @@ There is no installer yet. Build a universal binary with `make -C macos`; it lan
 
 ```sh
 make -C macos            # build macos/build/dpigate-proxy
-macos/dpigate run        # set DNS, flush the DNS cache, start the proxy, set system SOCKS; Ctrl-C undoes it
+macos/dpigate run        # set DNS, flush the DNS cache, start the proxy, set system proxies; Ctrl-C undoes it
 macos/dpigate restore    # put the saved settings back after a crash or kill -9
 macos/dpigate status     # proxy state and current proxy/DNS settings
 ```
 
 The proxy resolves names itself (UDP DNS to 1.1.1.1, then 1.0.0.1, 1 s timeout, cached) so a stalled system resolver cannot freeze it; set `DPIGATE_DNS="ip ip"` to change the servers.
 
-`run` saves your previous proxy and DNS settings in `~/Library/Application Support/DPIGate/state` and restores them on exit. macOS may ask for an administrator password when settings change; the script never calls `sudo` itself. Flushing the DNS cache needs root, so on start macOS shows its own password dialog once; if you cancel it, `run` continues but the first page loads may be slow.
+The proxy speaks SOCKS5 and HTTP CONNECT on the same port. `run` points the system SOCKS, web and secure web proxies at it and sets `HTTPS_PROXY`/`HTTP_PROXY` with `launchctl setenv`, so apps that ignore the system proxy (Discord's updater) are covered when started normally, e.g. from the Dock. Environment variables only reach apps launched afterwards: restart Discord after starting dpigate.
+
+`run` saves your previous proxy, environment and DNS settings in `~/Library/Application Support/DPIGate/state` and restores them on exit. macOS may ask for an administrator password when settings change; the script never calls `sudo` itself. Flushing the DNS cache needs root, so on start macOS shows its own password dialog once; if you cancel it, `run` continues but the first page loads may be slow.
 
 ## How it works
 

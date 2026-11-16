@@ -5,7 +5,7 @@ set -u
 set -m   # background jobs get default signal handling, so INT can reach dpigate
 
 HERE=$(cd "$(dirname "$0")" && pwd)
-DPIGATE=$HERE/../dpigate
+DPIGATE=${DPIGATE_SCRIPT:-$HERE/../dpigate}
 ROOT=$(mktemp -d "${TMPDIR:-/tmp}/dpigate-test.XXXXXX") || exit 1
 PASSED=0
 FAILED=0
@@ -33,6 +33,12 @@ case "${1:-}" in
     echo "Server: $(f socks_server)"
     echo "Port: $(f socks_port)"
     echo "Authenticated Proxy Enabled: 0";;
+  -getwebproxy|-getsecurewebproxy)
+    k=${1#-get}; k=${k%proxy}
+    if [ "$(f ${k}_enabled)" = yes ]; then echo "Enabled: Yes"; else echo "Enabled: No"; fi
+    echo "Server: $(f ${k}_server)"
+    echo "Port: $(f ${k}_port)"
+    echo "Authenticated Proxy Enabled: 0";;
   -getdnsservers)
     if [ -s "$FAKE/dns" ]; then tr ' ' '\n' < "$FAKE/dns"
     else echo "There aren't any DNS Servers set on $2."; fi;;
@@ -43,6 +49,8 @@ case "${1:-}" in
     if [ "${2:-}" != "$SVC" ]; then echo "** Error: $2 is not a recognized network service."; exit 1; fi
     case "$1" in
       -setsocksfirewallproxy) echo "$3" > "$FAKE/socks_server"; echo "$4" > "$FAKE/socks_port"; echo yes > "$FAKE/socks_enabled";;
+      -setwebproxy|-setsecurewebproxy) k=${1#-set}; k=${k%proxy}; echo "$3" > "$FAKE/${k}_server"; echo "$4" > "$FAKE/${k}_port"; echo yes > "$FAKE/${k}_enabled";;
+      -setwebproxystate|-setsecurewebproxystate) k=${1#-set}; k=${k%proxystate}; if [ "$3" = on ]; then echo yes; else echo no; fi > "$FAKE/${k}_enabled";;
       -setsocksfirewallproxystate) if [ "$3" = on ]; then echo yes; else echo no; fi > "$FAKE/socks_enabled";;
       -setdnsservers) shift 2; if [ "$*" = Empty ]; then : > "$FAKE/dns"; else echo "$*" > "$FAKE/dns"; fi;;
       -setproxybypassdomains) shift 2; if [ "$*" = Empty ]; then : > "$FAKE/bypass"; else echo "$*" > "$FAKE/bypass"; fi;;
@@ -57,10 +65,22 @@ EOF
   cat > "$T/proxy" <<'EOF'
 #!/bin/bash
 # Fake proxy: listens on the port given with -p until killed.
+echo "$*" > "$FAKE/proxy_args"
 port=1080
 while [ $# -gt 0 ]; do [ "$1" = -p ] && port=$2; shift; done
 echo PROXY_START >> "$FAKE/calls.log"
 exec nc -lk 127.0.0.1 "$port"
+EOF
+  cat > "$T/launchctl" <<'EOF'
+#!/bin/bash
+# Fake launchctl: environment variables live in $FAKE/env_<NAME>; every call is logged.
+echo "LAUNCHCTL $*" >> "$FAKE/calls.log"
+case "${1:-}" in
+  getenv) cat "$FAKE/env_$2" 2>/dev/null; exit 0;;
+  setenv) echo "$3" > "$FAKE/env_$2";;
+  unsetenv) rm -f "$FAKE/env_$2";;
+  *) exit 1;;
+esac
 EOF
   cat > "$T/dscacheutil" <<'EOF'
 #!/bin/bash
@@ -79,7 +99,7 @@ echo "RESOLVE $*" >> "$FAKE/calls.log"
 if [ "$(cat "$FAKE/dns" 2>/dev/null)" = "1.1.1.1 1.0.0.1" ]; then ip=162.159.1.1; else ip=212.175.180.11; fi
 printf 'name: %s\nip_address: %s\n' "$5" "$ip"
 EOF
-  chmod +x "$T/networksetup" "$T/route" "$T/proxy" "$T/dscacheutil" "$T/osascript" "$T/resolve"
+  chmod +x "$T/networksetup" "$T/route" "$T/proxy" "$T/dscacheutil" "$T/osascript" "$T/resolve" "$T/launchctl"
 }
 
 # setup <socks_enabled> <socks_server> <socks_port> <dns> <bypass>
@@ -92,11 +112,13 @@ setup() {
   printf '%s\n' "$3" > "$FAKE/socks_port"
   printf '%s\n' "$4" > "$FAKE/dns"
   printf '%s\n' "$5" > "$FAKE/bypass"
+  printf 'no\n' > "$FAKE/web_enabled"; : > "$FAKE/web_server"; echo 0 > "$FAKE/web_port"
+  printf 'no\n' > "$FAKE/secureweb_enabled"; : > "$FAKE/secureweb_server"; echo 0 > "$FAKE/secureweb_port"
   : > "$FAKE/calls.log"
   PORT=$((20000 + RANDOM % 20000))
   while lsof -nP -iTCP:"$PORT" -sTCP:LISTEN -t </dev/null >/dev/null 2>&1; do PORT=$((PORT + 1)); done
   export NETWORKSETUP=$T/networksetup ROUTE=$T/route PROXY_BIN=$T/proxy
-  export DSCACHEUTIL=$T/dscacheutil OSASCRIPT=$T/osascript RESOLVE_CMD="$T/resolve -q host -a name"
+  export LAUNCHCTL=$T/launchctl DSCACHEUTIL=$T/dscacheutil OSASCRIPT=$T/osascript RESOLVE_CMD="$T/resolve -q host -a name"
   export DPIGATE_WARMUP_SECS=3
   export STATE_DIR=$T/state DPIGATE_PORT=$PORT
   RUN_PID=
@@ -298,6 +320,80 @@ EOF
   finish "unchanged resolver answer: warns after the limit and continues"
 }
 
+test_11_web_and_env_applied_then_restored() {
+  setup no "" 0 "8.8.8.8" "localhost"
+  start_run
+  check "web proxy on, ours" "[ \"\$(cat '$FAKE/web_enabled')\" = yes ] && [ \"\$(cat '$FAKE/web_server')\" = 127.0.0.1 ] && [ \"\$(cat '$FAKE/web_port')\" = $PORT ]"
+  check "secure web proxy on, ours" "[ \"\$(cat '$FAKE/secureweb_enabled')\" = yes ] && [ \"\$(cat '$FAKE/secureweb_server')\" = 127.0.0.1 ] && [ \"\$(cat '$FAKE/secureweb_port')\" = $PORT ]"
+  check "HTTPS_PROXY set" "[ \"\$(cat '$FAKE/env_HTTPS_PROXY')\" = http://127.0.0.1:$PORT ]"
+  check "HTTP_PROXY set" "[ \"\$(cat '$FAKE/env_HTTP_PROXY')\" = http://127.0.0.1:$PORT ]"
+  check "restart hint printed" "grep -q 'Restart apps such as Discord' '$T/run.out'"
+  kill -INT "$RUN_PID"; wait "$RUN_PID" 2>/dev/null; RUN_PID=
+  check "web proxy off, empty" "[ \"\$(cat '$FAKE/web_enabled')\" = no ] && [ -z \"\$(cat '$FAKE/web_server')\" ]"
+  check "secure web proxy off, empty" "[ \"\$(cat '$FAKE/secureweb_enabled')\" = no ] && [ -z \"\$(cat '$FAKE/secureweb_server')\" ]"
+  check "HTTPS_PROXY unset (was unset)" "[ ! -e '$FAKE/env_HTTPS_PROXY' ] && grep -qx 'LAUNCHCTL unsetenv HTTPS_PROXY' '$FAKE/calls.log'"
+  check "HTTP_PROXY unset (was unset)" "[ ! -e '$FAKE/env_HTTP_PROXY' ]"
+  check "env restored before DNS" "[ \$(first_line '^LAUNCHCTL unsetenv') -lt \$(first_line '^-setdnsservers Test Ethernet 8.8.8.8') ]"
+  finish "run sets web, secure web and launchctl env; INT restores (previously unset)"
+}
+
+test_12_previous_web_and_env_restored() {
+  setup no "" 0 "8.8.8.8" "localhost"
+  echo yes > "$FAKE/web_enabled"; echo 10.1.1.1 > "$FAKE/web_server"; echo 3128 > "$FAKE/web_port"
+  echo yes > "$FAKE/secureweb_enabled"; echo 10.2.2.2 > "$FAKE/secureweb_server"; echo 8443 > "$FAKE/secureweb_port"
+  echo http://corp:3128 > "$FAKE/env_HTTPS_PROXY"
+  start_run
+  check "ours replaced theirs" "[ \"\$(cat '$FAKE/web_server')\" = 127.0.0.1 ] && [ \"\$(cat '$FAKE/env_HTTPS_PROXY')\" = http://127.0.0.1:$PORT ]"
+  kill -INT "$RUN_PID"; wait "$RUN_PID" 2>/dev/null; RUN_PID=
+  check "web proxy back" "[ \"\$(cat '$FAKE/web_server')\" = 10.1.1.1 ] && [ \"\$(cat '$FAKE/web_port')\" = 3128 ] && [ \"\$(cat '$FAKE/web_enabled')\" = yes ]"
+  check "secure web proxy back" "[ \"\$(cat '$FAKE/secureweb_server')\" = 10.2.2.2 ] && [ \"\$(cat '$FAKE/secureweb_port')\" = 8443 ] && [ \"\$(cat '$FAKE/secureweb_enabled')\" = yes ]"
+  check "HTTPS_PROXY back to the old value" "[ \"\$(cat '$FAKE/env_HTTPS_PROXY')\" = http://corp:3128 ]"
+  check "HTTP_PROXY (was unset) unset again" "[ ! -e '$FAKE/env_HTTP_PROXY' ]"
+  finish "previous web/secure web proxy and HTTPS_PROXY come back as they were"
+}
+
+test_13_proxy_fails_no_web_or_env() {
+  setup no "" 0 "8.8.8.8" "localhost"
+  export PROXY_BIN=/usr/bin/false
+  /bin/bash "$DPIGATE" run </dev/null >"$T/run.out" 2>&1
+  check "dpigate exits non-zero" "[ $? -ne 0 ]"
+  check "web/secure web never touched" "! grep -q -e '^-setwebproxy' -e '^-setsecurewebproxy' '$FAKE/calls.log'"
+  check "launchctl never set or unset" "! grep -q -e '^LAUNCHCTL setenv' -e '^LAUNCHCTL unsetenv' '$FAKE/calls.log'"
+  check "DNS restored" "[ \"\$(cat '$FAKE/dns')\" = 8.8.8.8 ]"
+  finish "proxy that fails to start leaves web proxies and environment alone"
+}
+
+test_14_old_state_file_restore() {
+  setup no "" 0 "1.1.1.1 1.0.0.1" "localhost"
+  # An old-format state file (no web/env fields); the system looks like a run applied it.
+  echo yes > "$FAKE/socks_enabled"; echo 127.0.0.1 > "$FAKE/socks_server"; echo "$PORT" > "$FAKE/socks_port"
+  echo yes > "$FAKE/web_enabled"; echo 7.7.7.7 > "$FAKE/web_server"; echo 7777 > "$FAKE/web_port"
+  echo http://keep:1 > "$FAKE/env_HTTPS_PROXY"
+  mkdir -p "$STATE_DIR"
+  printf 'version=1\nservice=Test Ethernet\nscript_pid=\nproxy_pid=\nproxy_comm=\nsocks_applied=1\nsocks_enabled=no\nsocks_server=\nsocks_port=0\nbypass=localhost\ndns=8.8.8.8\n' > "$STATE_DIR/state"
+  /bin/bash "$DPIGATE" restore </dev/null >"$T/restore.out" 2>&1
+  check "restore exits 0" "[ $? -eq 0 ]"
+  check "DNS back" "[ \"\$(cat '$FAKE/dns')\" = 8.8.8.8 ]"
+  check "SOCKS off" "[ \"\$(cat '$FAKE/socks_enabled')\" = no ]"
+  check "web proxy untouched" "[ \"\$(cat '$FAKE/web_server')\" = 7.7.7.7 ] && ! grep -q -e '^-setwebproxy' -e '^-setsecurewebproxy' '$FAKE/calls.log'"
+  check "launchctl untouched" "[ \"\$(cat '$FAKE/env_HTTPS_PROXY')\" = http://keep:1 ] && ! grep -q -e '^LAUNCHCTL setenv' -e '^LAUNCHCTL unsetenv' '$FAKE/calls.log'"
+  check "state file removed" "[ ! -f '$STATE_DIR/state' ]"
+  finish "old-format state file: restore handles DNS/SOCKS, leaves web and env alone"
+}
+
+test_15_proxy_args_socks_and_http() {
+  setup no "" 0 "8.8.8.8" "localhost"
+  start_run
+  check "both modes on one port, plus port and tlsrec" "grep -q -e '-i socks5://127.0.0.1 -i http://127.0.0.1 -p $PORT --tlsrec 1+s' '$FAKE/proxy_args'"
+  kill -INT "$RUN_PID"; wait "$RUN_PID" 2>/dev/null; RUN_PID=
+  /bin/bash "$DPIGATE" run -- --extra-flag </dev/null >"$T/run2.out" 2>&1 &
+  RUN_PID=$!
+  wait_for "grep -q -e '--extra-flag' '$FAKE/proxy_args'"
+  check "run -- args are appended" "grep -q -e '--tlsrec 1+s --extra-flag' '$FAKE/proxy_args'"
+  kill -INT "$RUN_PID"; wait "$RUN_PID" 2>/dev/null; RUN_PID=
+  finish "proxy gets SOCKS5 and HTTP CONNECT modes; extra args are appended"
+}
+
 trap 'teardown; rm -rf "$ROOT"' EXIT
 
 test_1_run_applies_then_int_restores
@@ -310,6 +406,11 @@ test_7_order_dns_flush_proxy_socks
 test_8_osascript_cancelled_still_runs
 test_9_warmup
 test_10_warmup_timeout
+test_11_web_and_env_applied_then_restored
+test_12_previous_web_and_env_restored
+test_13_proxy_fails_no_web_or_env
+test_14_old_state_file_restore
+test_15_proxy_args_socks_and_http
 
 echo "SUMMARY: $PASSED passed, $FAILED failed"
 [ "$FAILED" -eq 0 ]
