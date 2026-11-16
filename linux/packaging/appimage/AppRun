@@ -344,8 +344,10 @@ resolve_cfg_dir() {
 # The portable mode must leave nothing under ~: its log goes into the temporary
 # staging directory, or nowhere in a dry run.
 STAGE=""
+LAUNCH_REPORT=""
 cleanup() {
     if [ -n "$STAGE" ] && [ -d "$STAGE" ]; then rm -rf -- "$STAGE"; fi
+    if [ -n "$LAUNCH_REPORT" ]; then rm -f -- "$LAUNCH_REPORT"; fi
 }
 trap cleanup EXIT
 
@@ -678,10 +680,15 @@ if [ "$MODE_INSTALL" -eq 1 ] || [ ! -f "$DEST/.installed" ]; then
         say "would run: bash $DEST/install.sh --no-build ${INSTALL_ARGS[*]:-}"
     else
         say "running install.sh from $DEST"
+        # The installer's graphical wizard can start DPIGate itself when you click Finish
+        # (its "Launch" box). Two starters race for the single tray, and the loser used to
+        # tear the whole session down. The wizard says here whether it started it.
+        LAUNCH_REPORT="$(mktemp "${XDG_RUNTIME_DIR:-${TMPDIR:-/tmp}}/dpigate-launch.XXXXXX")" || LAUNCH_REPORT=""
+        [ -z "$LAUNCH_REPORT" ] || : > "$LAUNCH_REPORT"
         # SUDO_PASSWORD (a shell variable, not exported) goes to install.sh as an
         # environment prefix, which install.sh and the wizard accept: the password
         # asked for above is not asked again.
-        if ! SUDO_PASSWORD="${SUDO_PASSWORD:-}" bash "$DEST/install.sh" --no-build ${INSTALL_ARGS[@]+"${INSTALL_ARGS[@]}"}; then
+        if ! GDPI_LAUNCH_REPORT="$LAUNCH_REPORT" SUDO_PASSWORD="${SUDO_PASSWORD:-}" bash "$DEST/install.sh" --no-build ${INSTALL_ARGS[@]+"${INSTALL_ARGS[@]}"}; then
             die "install.sh failed. Nothing is marked as installed; run AppRun again after fixing the reported problem."
         fi
         if [ "$CHECK_ONLY" -eq 1 ]; then
@@ -705,6 +712,15 @@ if [ "$DRY_RUN" -eq 1 ]; then
 fi
 [ -x "$DATA_DIR/tray-launcher.sh" ] || die "$DATA_DIR/tray-launcher.sh is missing; install step did not complete"
 unset SUDO_PASSWORD
+if [ -n "${LAUNCH_REPORT:-}" ]; then
+    _launched=0
+    grep -q launched "$LAUNCH_REPORT" 2>/dev/null && _launched=1
+    rm -f -- "$LAUNCH_REPORT"
+    if [ "$_launched" -eq 1 ]; then
+        say "the installer already started $APP_NAME; not starting a second tray"
+        exit 0
+    fi
+fi
 setsid "$DATA_DIR/tray-launcher.sh" </dev/null >/dev/null 2>&1 &
 disown 2>/dev/null || true
 say "tray started"

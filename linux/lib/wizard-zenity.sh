@@ -126,6 +126,9 @@ wizard_zenity_main() {
         rm -f "$logfile" "$logfile.rc"
         if [ "$do_launch" = "1" ] && [ -x "$data_dir/start.sh" ]; then
             ( cd "$data_dir" && setsid "$data_dir/start.sh" >/dev/null 2>&1 & ) || true
+            # Tell a caller that starts DPIGate itself (the AppImage's AppRun) that this
+            # already happened: two starters race for the tray.
+            [ -n "${GDPI_LAUNCH_REPORT:-}" ] && echo launched > "$GDPI_LAUNCH_REPORT" 2>/dev/null || true
         fi
         return 0
     fi

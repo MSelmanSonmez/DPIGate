@@ -635,6 +635,12 @@ class Wizard:
                                      stdout=subprocess.DEVNULL,
                                      stderr=subprocess.DEVNULL,
                                      start_new_session=True)
+                    # Tell a caller that starts DPIGate itself (the AppImage's AppRun)
+                    # that this already happened: two starters race for the tray.
+                    report = os.environ.get("GDPI_LAUNCH_REPORT")
+                    if report:
+                        with open(report, "w") as fh:
+                            fh.write("launched\n")
                 except OSError:
                     pass
         Gtk.main_quit()
