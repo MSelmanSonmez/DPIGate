@@ -142,13 +142,91 @@ resolution, and build all OK.` Remaining `missing:` lines are real problems;
 It does **not** contain the C libraries the daemon links against, nor `nftables`,
 `iptables`, `libcap`, or the Python/GTK stack for the tray; those come from the host.
 
-**Runtime packages.** The daemon needs the runtime packages of
-`libnetfilter_queue`, `libnfnetlink` and `libmnl`; the tray needs python3 with
-GTK 3 and AyatanaAppIndicator3 (or AppIndicator3). Running the AppImage needs no
-compiler and no `-dev` packages. Before it copies or installs anything, AppRun
-checks for them and installs what is missing through the distribution's package
-manager (`linux/lib/platform.sh`, the same code `install.sh` uses), after one
-password prompt:
+The AppImage can **install** DPIGate or **run it without installing**:
+
+```bash
+chmod +x dpigate-<version>-x86_64.AppImage
+./dpigate-<version>-x86_64.AppImage              # double-click works too
+./dpigate-<version>-x86_64.AppImage --install    # install (see below)
+./dpigate-<version>-x86_64.AppImage --portable   # run without installing
+./dpigate-<version>-x86_64.AppImage --uninstall  # remove an installed copy
+```
+
+With no flag: if this version is already installed, the AppImage just opens the
+installed tray. If it is not, a small dialog (a text prompt when started from a
+terminal) asks which of the two you want. There is no "don't ask again"; once you
+install, it stops asking because it is installed. With a display but no dialog tool
+(`zenity`, or python3 with GTK 3) it installs, as earlier versions did; with neither
+a terminal nor a display it asks nothing, changes nothing and exits with status 2.
+
+#### Install
+
+`--install` (or choosing *Install*) copies the payload out of the read-only AppImage to
+`~/.local/share/DPIGate/<version>/`, runs that copy's `install.sh --no-build` (it asks
+for root through `sudo`, `doas`, `pkexec` or `run0` when it needs it; this includes
+`setcap`, the application-menu entry and, if you choose it, start at login) and starts
+the tray. Later launches of the same version only start the tray. A newer AppImage
+copies and installs its own version; the older `<version>/` folders are not removed
+automatically. Right-click the tray icon and choose Uninstall, run `--uninstall`, or run
+`~/.local/share/DPIGate/uninstall.sh` to remove it.
+
+#### Run without installing
+
+`--portable` (or choosing *Run without installing*) leaves nothing behind when you are
+done: no `~/.local/share/DPIGate`, no systemd unit, no autostart entry, no menu entry.
+
+- **One password prompt**, at the start. After that, choosing **Exit** in the tray
+  stops the bypass and removes the firewall rules **without asking again**.
+- The engine runs as root from a temporary, root-owned copy under
+  `/run/dpigate/<uid>/` (`/dev/shm/dpigate/<uid>/` if `/run` cannot run programs). It
+  cannot run from the AppImage itself: the AppImage's mount is `nosuid`, so `setcap` has
+  no effect there, and root cannot enter your FUSE mount. So the engine runs as root, as
+  the system-service install does, with no capabilities set.
+- The tray runs as you, straight from the AppImage. A root helper watches the tray:
+  when it exits, however it exits (Exit, a crash, `kill -9`, logging out), the helper
+  removes the firewall rules, stops the engine and deletes `/run/dpigate/<uid>/`. If the
+  engine dies by itself the helper removes the rules too. Only a root `kill -9` of the
+  helper itself can leave rules behind until the next start (they carry the `bypass`
+  flag, so traffic keeps flowing) or a reboot.
+- **Settings** (ProgramFilters, the DNS and "Bypass All Traffic" choices) are in
+  `<AppImage file name>.config/` next to the AppImage, for example
+  `dpigate-1.0.1-x86_64.AppImage.config/`. If that folder cannot be created or written
+  (read-only or removable media) the settings are kept in `~/.config/DPIGate` instead,
+  and AppRun says so. To start over, delete the folder.
+- You can still edit **Program Filters** from the tray; the running engine picks the
+  changes up within a few seconds. Because the tray cannot restart the root engine,
+  **DNS** and **Bypass All Traffic** choices are saved and take effect the next time you
+  start DPIGate. The tray has no Auto Start and no Uninstall entry in this mode.
+- Only one DPIGate tray (installed or not) runs at a time. Starting a second one says
+  "already running" and does nothing.
+- The tray is required: an engine nobody can stop must not run. If the tray packages
+  are missing and cannot be installed, the engine is not started.
+
+How the root part is kept safe: root never runs a file you can write. AppRun packs the
+payload into one tar file inside the read-only AppImage mount and computes its SHA-256 there.
+A single root call receives the checksum on its command line, copies the tarball into a
+fresh root-owned directory, refuses to go on unless the copy has exactly that checksum,
+and runs everything from the extracted copy. Your ProgramFilters and settings are read as
+you (not as root), at most 64 KiB each, and copied into the root directory. There is no
+channel from you to the root helper: "stop" is the tray's death. Known limits: the
+password dialog is the one of your system (a `pkexec` dialog says it runs `bash`); the
+checksum protects the payload after you authenticate, not against running a malicious
+AppImage; and the escalation tool (`sudo`, `pkexec`, `doas`, `run0`) is trusted to hand
+over a clean environment.
+
+#### Runtime packages
+
+The daemon needs the runtime packages of `libnetfilter_queue`, `libnfnetlink` and
+`libmnl`; the tray needs python3 with GTK 3 and AyatanaAppIndicator3 (or
+AppIndicator3). Running the AppImage needs no compiler and no `-dev` packages. Before
+anything is copied or started, AppRun checks for them and installs what is missing
+through the distribution's package manager (`linux/lib/platform.sh`, the same code
+`install.sh` uses), **with one password prompt in total**: the install path hands the
+password it asked for to `install.sh` (and to its graphical wizard, which then skips its
+own password page), and the portable path installs the packages inside the single root
+call that also starts the helper. With `pkexec` or `run0`, which prompt per call, the
+portable mode is still one call; the install path then follows `install.sh`, which
+prompts per step as it always did.
 
 - The three libraries are required. Their runtime names: Arch
   `libnetfilter_queue libnfnetlink libmnl`; Debian/Ubuntu
@@ -156,27 +234,16 @@ password prompt:
   `libnetfilter_queue libnfnetlink libmnl`. If they still cannot be installed,
   AppRun names them and exits with status 1. For other package managers AppRun
   does not know the names; it prints a generic message and exits 1.
-- The tray is optional. If its packages cannot be installed, the install
-  continues without the tray icon and AppRun prints a warning. Install the tray
-  packages yourself and start the AppImage again to get the icon.
+- The tray packages are `libnotify`, python3 with PyGObject, GTK 3 and
+  AyatanaAppIndicator3/AppIndicator3. AppRun does not install `zenity` or `polkit`:
+  they are the password prompts, and the prompt comes before any package can be
+  installed. For an **install** a missing tray is only a warning (the bypass is
+  installed without the icon); for **run without installing** it is an error.
+- If you decline the password prompt, nothing is installed and nothing is started.
 
 `--assume-deps` installs no packages: missing libraries are reported and AppRun
-exits 1; missing tray packages only produce the warning. `--dry-run` never
-installs. `--check-only`, `--help` and `--uninstall` skip this step.
-
-**Running it.** Make the file executable and start it:
-
-```bash
-chmod +x dpigate-<version>-x86_64.AppImage
-./dpigate-<version>-x86_64.AppImage
-```
-
-The first launch copies the payload out of the read-only AppImage to
-`~/.local/share/DPIGate/<version>/`, runs that copy's `install.sh --no-build`
-(it asks for root through `sudo`, `doas`, `pkexec` or `run0` when it needs it),
-and starts the tray. Later launches of the same version only start the tray. A
-newer AppImage copies and installs its own version; the older `<version>/` folders
-are not removed automatically.
+exits 1; missing tray packages produce the warning (install) or the error (portable).
+`--dry-run` never installs. `--check-only`, `--help` and `--uninstall` skip this step.
 
 AppImages need FUSE to mount. If it is not available, run
 `./dpigate-<version>-x86_64.AppImage --appimage-extract-and-run`, or install
@@ -186,14 +253,15 @@ AppImages need FUSE to mount. If it is not available, run
 
 | Flag | What it does |
 |---|---|
-| `--install` | Copy the payload again and run install.sh again, even if this version is installed |
+| `--install` | Install: copy the payload again and run install.sh again, even if this version is installed |
+| `--portable` | Run without installing (cannot be combined with `--install`, install flags or `--no-tray`) |
 | `--uninstall` | Run the installed `uninstall.sh` (removes the firewall rules, service, files and config) |
-| `--no-tray` | Do not start the tray after the install step |
-| `--dry-run` | Testing only: copy the payload, print the install and tray steps, run neither |
+| `--no-tray` | Do not start the tray after the install step (install path only) |
+| `--dry-run` | Testing only: print the steps. Install path: copies the payload but runs neither install.sh nor the tray. With `--portable`: creates nothing |
 | `--help` | Show the usage text |
 
 Any other flag is passed to `install.sh`, and passing one implies an install step.
-The `install.sh` flags above work here as well:
+The `install.sh` flags above work here as well (install path only):
 
 | Flag | What it does |
 |---|---|
@@ -207,9 +275,6 @@ The `install.sh` flags above work here as well:
 | `--check-only` | Probe the system only; the tray is not started |
 
 `--no-build` is implied, because the AppImage ships a prebuilt binary.
-
-To remove DPIGate, run `./dpigate-<version>-x86_64.AppImage --uninstall` or
-`~/.local/share/DPIGate/uninstall.sh`.
 
 **Building the AppImage.** Needs `cc`, `make`, `pkg-config`, the development
 packages listed in [Requirements](#requirements) (so the daemon compiles and links
