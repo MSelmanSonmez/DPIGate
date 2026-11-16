@@ -59,10 +59,15 @@ def _plat(script_dir: str, verb: str) -> str:
 def _sudo_password_needed() -> bool:
     """True when a password page is worth showing.
 
-    root, NOPASSWD sudo and sudo-less hosts all skip it — on the last one
+    root, a password handed over in $SUDO_PASSWORD, NOPASSWD sudo and sudo-less
+    hosts all skip it — on the last one
     install.sh escalates through pkexec/run0, which prompt on their own.
     """
     if os.geteuid() == 0:
+        return False
+    # The caller (the AppImage's AppRun) already asked once and handed the
+    # password over in the environment, which the install child inherits.
+    if os.environ.get("SUDO_PASSWORD"):
         return False
     if not shutil.which("sudo"):
         return False
@@ -630,6 +635,12 @@ class Wizard:
                                      stdout=subprocess.DEVNULL,
                                      stderr=subprocess.DEVNULL,
                                      start_new_session=True)
+                    # Tell a caller that starts DPIGate itself (the AppImage's AppRun)
+                    # that this already happened: two starters race for the tray.
+                    report = os.environ.get("GDPI_LAUNCH_REPORT")
+                    if report:
+                        with open(report, "w") as fh:
+                            fh.write("launched\n")
                 except OSError:
                     pass
         Gtk.main_quit()

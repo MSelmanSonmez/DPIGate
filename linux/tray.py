@@ -22,14 +22,109 @@ Launched by start.sh with these env vars:
   GDPI_DNS_LABEL      — "Name addr:port (Xms)"
   GDPI_DNS_CURRENT    — index of current DNS in candidates list
   GDPI_DNS_INFO       — "name|addr|port|ms|status;name|..." (per candidate)
-  GDPI_CONFIG_DIR     — XDG_CONFIG_HOME/DPIGate (systemd unit location)
+  GDPI_CONFIG_DIR     — settings directory (default XDG_CONFIG_HOME/DPIGate)
+  GDPI_DATA_DIR       — state directory with goodbyedpi.pid/.log (default XDG_DATA_HOME/DPIGate)
 """
 import os
 import sys
 import signal
 import atexit
 import shlex
+import stat
 import subprocess
+import fcntl
+
+# ── Single instance (one tray per user) ─────────────────────────────────────
+# Defined before the GTK import so `tray.py --check-running` works on a host
+# that has no PyGObject yet (AppRun asks before it installs anything).
+_instance_lock = None   # the open lock file; kept for the life of the process
+EXIT_ALREADY_RUNNING = 75   # exit status of a second tray (see main())
+
+
+def _lock_dir(create):
+    """Directory holding the lock file, or None when there is no usable one.
+
+    $XDG_RUNTIME_DIR (a per-user 0700 directory) when set; otherwise a private
+    directory under /tmp that must be owned by this user and closed to others.
+    Never raises: a host where none of this works runs without the lock."""
+    runtime = os.environ.get("XDG_RUNTIME_DIR", "")
+    if runtime and os.path.isdir(runtime):
+        return runtime
+    base = os.path.join("/tmp", "dpigate-%d" % os.getuid())
+    try:
+        if create:
+            try:
+                os.mkdir(base, 0o700)
+            except FileExistsError:
+                pass
+        st = os.lstat(base)
+    except OSError:
+        return None
+    if (not stat.S_ISDIR(st.st_mode) or st.st_uid != os.getuid()
+            or stat.S_IMODE(st.st_mode) & 0o077):
+        return None
+    return base
+
+
+def _tray_running():
+    """True when another DPIGate tray of this user holds the lock.
+
+    A shared, non-blocking probe on the lock file: it never takes the lock
+    itself, so it cannot make a starting tray think it is a duplicate."""
+    base = _lock_dir(False)
+    if base is None:
+        return False
+    try:
+        fd = os.open(os.path.join(base, "dpigate-tray.lock"), os.O_RDONLY)
+    except OSError:
+        return False
+    try:
+        fcntl.flock(fd, fcntl.LOCK_SH | fcntl.LOCK_NB)
+    except BlockingIOError:
+        return True
+    except OSError:
+        return False
+    finally:
+        os.close(fd)
+    return False
+
+
+def _acquire_single_instance():
+    """True when this process is the only DPIGate tray for this user.
+
+    The lock is an flock(2) on a file in $XDG_RUNTIME_DIR. The kernel releases
+    it when the holder exits, however it exits, so a crashed tray cannot leave
+    a stale lock behind. The pid is not used for this. When the lock cannot be
+    set up at all (no usable directory, a read-only or full runtime dir, any
+    OSError) the tray runs without it and says so: a lost lock must not stop
+    the bypass from coming up."""
+    global _instance_lock
+    base = _lock_dir(True)
+    if base is None:
+        sys.stderr.write("[tray] no private lock directory; running without the single-instance lock\n")
+        return True
+    try:
+        fd = os.open(os.path.join(base, "dpigate-tray.lock"),
+                     os.O_RDWR | os.O_CREAT, 0o600)
+    except OSError as exc:
+        sys.stderr.write("[tray] cannot open the lock file (%s); running without the single-instance lock\n" % exc)
+        return True
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        os.close(fd)
+        return False
+    except OSError as exc:
+        os.close(fd)
+        sys.stderr.write("[tray] cannot lock the lock file (%s); running without the single-instance lock\n" % exc)
+        return True
+    _instance_lock = fd
+    return True
+
+
+if __name__ == "__main__" and "--check-running" in sys.argv[1:]:
+    # Exit 0 = a tray is running, 1 = none. Nothing else is imported or started.
+    sys.exit(0 if _tray_running() else 1)
 
 # ── Env config ──────────────────────────────────────────────────────────────
 def _env_int(name: str, default: int) -> int:
@@ -48,13 +143,19 @@ GDPI_DNS_LABEL = os.environ.get("GDPI_DNS_LABEL", "DNS")
 GDPI_DNS_CURRENT = _env_int("GDPI_DNS_CURRENT", -1)
 GDPI_DNS_INFO  = os.environ.get("GDPI_DNS_INFO", "")
 GDPI_BYPASS_ALL = os.environ.get("GDPI_BYPASS_ALL", "") == "1"
+# Run-without-installing mode (AppImage). The engine and the firewall belong to
+# a root helper that watches THIS process: when the tray exits, however it
+# exits, the helper tears everything down. So the tray never runs kill.sh, has
+# no Auto Start / Uninstall (nothing is installed), and cannot restart the
+# engine, so settings that need a restart apply at the next start.
+GDPI_PORTABLE = os.environ.get("GDPI_PORTABLE", "") == "1"
 
 # ── Settings persistence (KEY=VALUE file in ~/.config/DPIGate) ─────
 # The tray is the only writer: every menu toggle lands here, and start.sh /
 # tray-launcher.sh read the same file at startup so the choice survives a
 # restart, a logout and a reboot. A missing or corrupt file degrades to {} —
 # losing a preference must never stop the tray from coming up.
-_CONFIG_DIR = os.path.join(
+_CONFIG_DIR = os.environ.get("GDPI_CONFIG_DIR") or os.path.join(
     os.environ.get("XDG_CONFIG_HOME", os.path.expanduser("~/.config")),
     "DPIGate")
 SETTINGS_FILE = os.path.join(_CONFIG_DIR, "settings")
@@ -285,8 +386,10 @@ KILL_SH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "kill.sh")
 UNINSTALL_SH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "uninstall.sh")
 # goodbyedpi PID file — written by start.sh:start_goodbyedpi, used by the
 # restart poll loop to verify the new daemon is alive before quitting.
-_DATA_DIR = os.environ.get("XDG_DATA_HOME", os.path.expanduser("~/.local/share"))
-PID_FILE = os.path.join(_DATA_DIR, "DPIGate", "goodbyedpi.pid")
+_DATA_DIR = os.environ.get("GDPI_DATA_DIR") or os.path.join(
+    os.environ.get("XDG_DATA_HOME", os.path.expanduser("~/.local/share")),
+    "DPIGate")
+PID_FILE = os.path.join(_DATA_DIR, "goodbyedpi.pid")
 
 
 def kill_goodbyedpi(noprompt=False):
@@ -300,6 +403,10 @@ def kill_goodbyedpi(noprompt=False):
     be able to cancel.
 
     Returns True on success, False on failure INCLUDING a cancelled dialog."""
+    if GDPI_PORTABLE:
+        # The root helper unloads the rules and stops the engine when this
+        # process ends; no second password prompt, nothing to run here.
+        return True
     if os.path.exists(KILL_SH):
         env = os.environ.copy()
         if noprompt:
@@ -616,12 +723,20 @@ def on_dns_selected(item, index):
     # out-of-range value degrades to auto-detect inside dns_detect.py.
     # Armed for undo first: if the restart never lands, the write is rolled
     # back so a cancelled click cannot apply itself at the next boot.
+    if GDPI_PORTABLE:
+        _save_setting("FORCE_DNS_INDEX", index)
+        show_notify("DNS choice saved - it applies the next time DPIGate is started")
+        return
     _arm_revert("FORCE_DNS_INDEX", _load_settings().get("FORCE_DNS_INDEX", "-1"))
     _save_setting("FORCE_DNS_INDEX", index)
     restart_start_sh(force_dns_index=index)
 
 
 def on_dns_autodetect(item):
+    if GDPI_PORTABLE:
+        _save_setting("FORCE_DNS_INDEX", -1)
+        show_notify("DNS auto-detect saved - it applies the next time DPIGate is started")
+        return
     _arm_revert("FORCE_DNS_INDEX", _load_settings().get("FORCE_DNS_INDEX", "-1"))
     _save_setting("FORCE_DNS_INDEX", -1)
     restart_start_sh(force_dns_index=-1)
@@ -722,6 +837,10 @@ def on_autostart_toggle(item):
 def on_bypass_all_toggle(item):
     """Toggle between per-program filtering and bypass-all-traffic mode."""
     active = item.get_active()
+    if GDPI_PORTABLE:
+        _save_setting("BYPASS_ALL", "1" if active else "0")
+        show_notify("Bypass mode saved - it applies the next time DPIGate is started")
+        return
     # Persist FIRST: if the machine loses power between here and the daemon
     # coming up, the user's choice must still be there on the next start.
     # _arm_revert covers the other branch: a restart that never lands (the
@@ -797,8 +916,7 @@ def check_alive():
     except OSError:
         # ESRCH — no such process. goodbyedpi died → clean up firewall + exit.
         # Read last log lines for debugging (e.g. "nfq_create_queue failed").
-        data_dir = os.environ.get("XDG_DATA_HOME", os.path.expanduser("~/.local/share"))
-        log_path = os.path.join(data_dir, "DPIGate", "goodbyedpi.log")
+        log_path = os.path.join(_DATA_DIR, "goodbyedpi.log")
         log_tail = ""
         try:
             if os.path.exists(log_path):
@@ -821,7 +939,8 @@ def check_alive():
     # cost low; this is the only mechanism that survives a ruleset flush
     # from outside DPIGate.
     _watchdog_tick += 1
-    if _watchdog_tick % 15 == 0:
+    if _watchdog_tick % 15 == 0 and not GDPI_PORTABLE:
+        # (portable mode: the root helper reloads the rules itself)
         rc, _out = _plat("fw-is-loaded", noprompt=True)
         if rc == 1 and _plat("fw-load", noprompt=True)[0] == 0:
             show_notify("Firewall rules reloaded")
@@ -873,19 +992,22 @@ def build_menu():
 
     menu.append(Gtk.SeparatorMenuItem())
 
-    status = verify_autostart()
-    autostart = Gtk.CheckMenuItem(label=status['detail'])
-    autostart.set_active(status['active'])
-    autostart.connect("activate", on_autostart_toggle)
-    menu.append(autostart)
+    if not GDPI_PORTABLE:
+        # Nothing is installed in run-without-installing mode, so there is no
+        # login entry to toggle and nothing to uninstall.
+        status = verify_autostart()
+        autostart = Gtk.CheckMenuItem(label=status['detail'])
+        autostart.set_active(status['active'])
+        autostart.connect("activate", on_autostart_toggle)
+        menu.append(autostart)
 
-    menu.append(Gtk.SeparatorMenuItem())
+        menu.append(Gtk.SeparatorMenuItem())
 
-    uninstall_item = Gtk.MenuItem(label="Uninstall")
-    uninstall_item.connect("activate", on_uninstall)
-    menu.append(uninstall_item)
+        uninstall_item = Gtk.MenuItem(label="Uninstall")
+        uninstall_item.connect("activate", on_uninstall)
+        menu.append(uninstall_item)
 
-    menu.append(Gtk.SeparatorMenuItem())
+        menu.append(Gtk.SeparatorMenuItem())
     exit_item = Gtk.MenuItem(label="Exit")
     exit_item.connect("activate", on_exit)
     menu.append(exit_item)
@@ -895,6 +1017,17 @@ def build_menu():
 
 
 def main():
+    # One tray per user. A second start (autostart plus the application menu,
+    # or the AppImage launched twice) exits quietly before it registers the
+    # teardown handlers or starts the watchdog, so it cannot report the
+    # engine as "exited unexpectedly" when the first tray stops it.
+    if not _acquire_single_instance():
+        sys.stderr.write("[tray] another DPIGate tray is already running; exiting\n")
+        # A status of its own: not 0 (nothing was started here) and not the generic 1
+        # (nothing failed). Callers that only want "a tray exists" treat it as success and
+        # must never tear anything down for it. 75 = sysexits' EX_TEMPFAIL.
+        sys.exit(EXIT_ALREADY_RUNNING)
+
     # Use theme icon name (installed to ~/.local/share/icons/hicolor).
     # Falls back to file path if theme icon not found, then to "network-server".
     icon_name = "dpigate"

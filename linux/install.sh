@@ -131,7 +131,10 @@ _run_gui_wizard() {
     # 1. GTK Assistant (same PyGObject stack the tray already needs).
     if [ -f "$SCRIPT_DIR/installer-gui.py" ] && command -v python3 >/dev/null 2>&1 \
        && python3 -c 'import gi; gi.require_version("Gtk","3.0"); from gi.repository import Gtk' 2>/dev/null; then
-        exec python3 "$SCRIPT_DIR/installer-gui.py" --installer "$SCRIPT_DIR/install.sh" "${presets[@]}"
+        # plat_password_unexport made $SUDO_PASSWORD a shell-local variable, so
+        # hand it to the wizard explicitly (empty when the caller gave none):
+        # a password the caller already asked for must not be asked again.
+        SUDO_PASSWORD="${SUDO_PASSWORD:-}" exec python3 "$SCRIPT_DIR/installer-gui.py" --installer "$SCRIPT_DIR/install.sh" "${presets[@]}"
     fi
 
     # 2. zenity wizard — same page order, no PyGObject.
@@ -204,9 +207,16 @@ echo "[install] distro: $(plat_distro)  pkgmgr: $(plat_pkgmgr)  init: $(plat_ini
 # Probe capabilities (never package names) and auto-install what's missing.
 # plat_deps_install re-probes afterwards, so a package manager that "succeeded"
 # without actually providing a compiler fails here instead of at `make`.
+# --no-build: the binary is prebuilt, so only the runtime tools are needed
+# (no compiler, make or development headers). The build path is unchanged.
+_deps_role=all
+if [ "$DO_BUILD" -eq 0 ]; then
+    export PLAT_DEPS_RUNTIME_ONLY=1
+    _deps_role=runtime
+fi
 if [ "$ASSUME_DEPS" -ne 1 ] && ! plat_deps_check; then
     _deps_rc=0
-    plat_deps_install all || _deps_rc=$?
+    plat_deps_install "$_deps_role" || _deps_rc=$?
     if [ "$_deps_rc" -eq 2 ]; then
         echo "[install] Password prompt cancelled. Install aborted - nothing was changed." >&2
         notify-send -a "DPIGate" -i dialog-warning "DPIGate" \
