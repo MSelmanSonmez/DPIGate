@@ -1,0 +1,18 @@
+ByeDPI (https://github.com/hufrea/byedpi), MIT License
+Upstream commit: e268477
+
+Files taken unmodified:
+  conev.c conev.h desync.c desync.h error.h extend.c extend.h kavl.h main.c
+  mpool.c mpool.h packets.c packets.h params.h proxy.h LICENSE
+
+Modified for DPIGate:
+  proxy.c  resolve() no longer calls the blocking getaddrinfo(); it uses
+           dns_resolver.c instead (plus a localhost shortcut).
+
+Added by DPIGate (not part of upstream):
+  dns_resolver.c dns_resolver.h  bounded IPv4 resolver: UDP A queries with a
+           1 s timeout, TCP retry on truncation, TTL-aware cache. Servers
+           default to 1.1.1.1 and 1.0.0.1; override with DPIGATE_DNS="ip[:port] ...".
+
+Not taken: win_service.c/.h (Windows only), Dockerfile, upstream Makefile,
+README and prebuilt objects/binaries.
