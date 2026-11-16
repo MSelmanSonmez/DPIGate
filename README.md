@@ -2,12 +2,13 @@
 
 <!-- shields.io cannot read a private repo; version is static and CI uses GitHub's own badges until the repo is public. -->
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue)](LICENSE)
-[![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux-lightgrey)](#quick-start)
+[![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20macOS-lightgrey)](#quick-start)
 [![Version](https://img.shields.io/badge/version-1.0.1-success)](../../releases)
 [![Windows build](https://github.com/MSelmanSonmez/DPIGate/actions/workflows/build.yml/badge.svg)](../../actions/workflows/build.yml)
 [![Linux CI](https://github.com/MSelmanSonmez/DPIGate/actions/workflows/linux.yml/badge.svg)](../../actions/workflows/linux.yml)
+[![macOS CI](https://github.com/MSelmanSonmez/DPIGate/actions/workflows/macos.yml/badge.svg)](../../actions/workflows/macos.yml)
 
-**Per-program DPI bypass for Windows and Linux.** A fork of
+**Per-program DPI bypass for Windows and Linux, site-list bypass for macOS (experimental).** A fork of
 [GoodbyeDPI](https://github.com/ValdikSS/GoodbyeDPI) that applies bypass tricks
 *only* to the programs you choose — browsers, Discord, whatever you list —
 while every other connection passes through untouched.
@@ -15,6 +16,9 @@ while every other connection passes through untouched.
 One-click install, a system tray to control it, automatic DNS selection, and a
 filter list you can edit while it runs. The Linux side is a native port of the
 same C engine (NFQUEUE + raw sockets instead of WinDivert), not a wrapper.
+On macOS there are no per-program filters: the app sets the system proxy to a
+local SOCKS5 proxy, and its Only Listed Sites option limits the bypass to the
+domains in a site list.
 
 ---
 
@@ -138,6 +142,10 @@ refuses to start rather than leave you debugging a bypass that cannot work;
 
 A menu bar app around a SOCKS5 proxy built on [ByeDPI](https://github.com/hufrea/byedpi). The packet-level tricks used on Windows and Linux (fake packets, TTL games) are not available on macOS, so only apps that honor the system proxy are covered. While DPIGate is on, the system proxy is always set. Safari and Chromium-based browsers follow it by default; Firefox must use "Use system proxy settings" (Settings → Network Settings), because with "No proxy" it bypasses DPIGate.
 
+Tested on Intel macOS 13 (13.7.8); Apple Silicon builds are untested.
+
+There is no Bypass All or Program Filters item on macOS: what gets the bypass is chosen with the site list (Only Listed Sites) instead.
+
 ### Install
 
 Unpack the release zip and run the installer; it copies the app to `~/Applications` (no admin rights):
@@ -153,14 +161,14 @@ From a source checkout (Command Line Tools are enough; `xcode-select --install`)
 make -C macos app && macos/install.sh
 ```
 
-The app is universal (Intel and Apple Silicon), ad-hoc signed and not notarized, so macOS may block the first launch: right-click the app, Open (`install.sh` already removes the download quarantine flag; for a copy you moved by hand use `xattr -d com.apple.quarantine`). There is no Dock icon; look for the icon in the menu bar. Only one DPIGate app runs at a time: a second launch says so and quits.
+The app is built as a universal binary (Intel and Apple Silicon), but only Intel has been tested. It is ad-hoc signed and not notarized, so macOS may block the first launch: right-click the app, Open (`install.sh` already removes the download quarantine flag; for a copy you moved by hand use `xattr -d com.apple.quarantine`). On macOS 15 Sequoia, right-click and Open is no longer enough: after the blocked launch, go to System Settings → Privacy & Security → Open Anyway. There is no Dock icon; look for the icon in the menu bar. Only one DPIGate app runs at a time: a second launch says so and quits.
 
 ### The menu
 
 | Menu item | What it does |
 |---|---|
-| **Turn On / Turn Off** | Starts the proxy, sets DNS, flushes the DNS cache and points the system proxies at it, or undoes all of that. macOS may ask for an administrator password when settings change |
-| **DNS: …** | Candidate servers, measured in the background; pick one or Auto-detect |
+| **Turn On / Turn Off** | Starts the proxy, sets DNS, flushes the DNS cache and points the system proxies at it, or undoes all of that. Each Turn On asks for an administrator password (the DNS cache flush needs it) |
+| **DNS: …** | Candidate servers, measured in the background with one plain, unencrypted UDP query for discord.com; Auto-detect skips servers that answer with a poisoned address. Pick one or Auto-detect. A choice on port 53 also becomes the system DNS |
 | **Only Listed Sites** | Applies the DPI tricks only to the domains in `sites.txt` (subdomains included; defaults to Discord's domains; off by default) and passes every other connection through unchanged |
 | **Edit Site List** | Opens `sites.txt`; edits restart a running proxy within 2 seconds. New on macOS: the Linux tray has no such item (there the program filter does this job) |
 | **Auto Start** | Toggle. A LaunchAgent starts the app at login; if you move the app, the entry is updated the next time it launches |
@@ -186,9 +194,9 @@ macos/dpigate status     # proxy state and current proxy/DNS settings
 
 The proxy speaks SOCKS5 and HTTP CONNECT on the same port. `run` points the system SOCKS, web and secure web proxies at it and sets `HTTPS_PROXY`/`HTTP_PROXY` with `launchctl setenv`, so apps that ignore the system proxy (Discord's updater) are covered when started normally, e.g. from the Dock. Environment variables only reach apps launched afterwards: restart Discord after starting dpigate.
 
-The proxy resolves names itself (UDP DNS to 1.1.1.1, then 1.0.0.1, 1 s timeout, cached) so a stalled system resolver cannot freeze it. `DPIGATE_DNS="ip ip"` sets those servers; the system DNS only takes the port-53 ones (`DPIGATE_SYSTEM_DNS` overrides).
+The proxy resolves names itself (plain UDP DNS, 1 s timeout, cached) so a stalled system resolver cannot freeze it. Its servers are the DNS chosen in the menu, or 1.1.1.1 then 1.0.0.1 when started without `DPIGATE_DNS`; `DPIGATE_DNS="ip ip"` sets them. The system DNS gets the same servers, but only the port-53 ones are taken (`DPIGATE_SYSTEM_DNS` overrides), so a Yandex entry on port 1253 leaves the system on 1.1.1.1 and 1.0.0.1.
 
-`run` saves your previous proxy, environment and DNS settings in `~/Library/Application Support/DPIGate/state` and restores them on exit. The script never calls `sudo` itself. Flushing the DNS cache needs root, so on start macOS shows its own password dialog once; if you cancel it, `run` continues but the first page loads may be slow.
+`run` saves your previous proxy, environment and DNS settings in `~/Library/Application Support/DPIGate/state` and restores them on exit. The script never calls `sudo` itself. Flushing the DNS cache needs root, so every start (Turn On or `run`) shows macOS's own password dialog, opened through `osascript`; restoring on exit does not ask. If you cancel it, `run` continues but the first page loads may be slow.
 
 ### Files
 
@@ -199,6 +207,14 @@ The proxy resolves names itself (UDP DNS to 1.1.1.1, then 1.0.0.1, 1 s timeout, 
 | Saved settings (while running) | `~/Library/Application Support/DPIGate/state` |
 | Log | `~/Library/Logs/DPIGate/dpigate.log` |
 | Auto Start entry | `~/Library/LaunchAgents/org.dpigate.menubar.plist` |
+
+### Known limitations
+
+- Switching between Wi-Fi and Ethernet may not apply the proxy to the new network service. Turn DPIGate off and on again after switching.
+- No Bypass All or Program Filters on macOS; selection is by site list only.
+- Apple Silicon (arm64) builds are untested.
+- Not notarized, so the first launch needs the approval steps above.
+- DNS measurement is plain UDP, not encrypted: port 53, and port 1253 for the Yandex candidate.
 
 ## How it works
 
@@ -296,6 +312,14 @@ DPIGate/
 │   ├── programs.txt            # Filter list (editable, hot-reloaded)
 │   ├── x86_64/                 # 64-bit binaries + WinDivert
 │   └── x86/                    # 32-bit binaries + WinDivert
+├── macos/
+│   ├── Makefile                # Proxy, menu bar app, release zip, test targets
+│   ├── app/                    # Menu bar app (Swift): main.swift, Info.plist
+│   ├── byedpi/                 # ByeDPI SOCKS5 proxy sources (MIT), see UPSTREAM
+│   ├── dpigate                 # Run script: DNS, system proxy, state, restore
+│   ├── install.sh              # Installer, no admin rights
+│   ├── uninstall.sh
+│   └── tests/                  # Shell and C tests, touch no system setting
 └── linux/
     ├── goodbyedpi.c/.h         # Packet loop (pio_* API instead of WinDivert)
     ├── proctrack_linux.c/.h    # Gate: /proc/net + sock_diag + inode→PID cache
@@ -348,6 +372,7 @@ warranty and liability disclaimer.
 - **[basil00/WinDivert](https://github.com/basil00/WinDivert)** — the packet capture/divert library behind the Windows build.
 - **[keift/goodbyedpi](https://github.com/keift/goodbyedpi)** — inspiration for the one-click startup installer.
 - **[bol-van/zapret](https://github.com/bol-van/zapret)** — reference for the NFQUEUE + raw-socket + fwmark approach used by the Linux port.
+- **[hufrea/byedpi](https://github.com/hufrea/byedpi)** — the SOCKS5 proxy engine behind the macOS app (MIT).
 
 ---
 
