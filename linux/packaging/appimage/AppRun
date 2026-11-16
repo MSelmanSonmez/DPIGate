@@ -101,7 +101,7 @@ install.sh flags (install path only, passed through):
   --autostart     start the tray (and the bypass) at login
   --no-autostart  remove any login autostart entry
   --no-shortcut   do not create the application-menu entry
-  --assume-deps   do not install packages (see above)
+  --assume-deps   do not install packages (see above; also works with --portable)
   --gui / --cli   force the graphical wizard or the text installer
   --check-only    probe the system only; installs nothing
 
@@ -171,8 +171,13 @@ fi
 
 # ── Which mode? ─────────────────────────────────────────────────────────────
 if [ "$WANT_PORTABLE" -eq 1 ]; then
-    if [ "$WANT_INSTALL" -eq 1 ] || [ "${#INSTALL_ARGS[@]}" -gt 0 ]; then
-        die "--portable cannot be combined with --install or install options (${INSTALL_ARGS[*]:-})"
+    # --assume-deps (no package installs) is meaningful here; every other install.sh flag is not.
+    _other=()
+    for _a in ${INSTALL_ARGS[@]+"${INSTALL_ARGS[@]}"}; do
+        [ "$_a" = "--assume-deps" ] || _other+=("$_a")
+    done
+    if [ "$WANT_INSTALL" -eq 1 ] || [ "${#_other[@]}" -gt 0 ]; then
+        die "--portable cannot be combined with --install or install options (${_other[*]:-})"
     fi
     [ "$NO_TRAY" -eq 0 ] || die "--portable needs the tray: it is the only way to stop the bypass"
     MODE=portable
