@@ -1,5 +1,5 @@
 #!/bin/bash
-# Tests for the menu actions of the DPIGate app (Auto Start, Bypass All, Only Listed Sites, DNS, Uninstall, program launch).
+# Tests for the menu actions of the DPIGate app (menu items, Auto Start, Only Listed Sites, DNS, Uninstall).
 # Menu clicks are replaced by DPIGATE_APP_ACTION (one action, then exit). Every system tool is a fake in a
 # temporary directory; no real setting, LaunchAgent or folder is touched. A status item flashes meanwhile.
 set -u
@@ -100,11 +100,16 @@ env -u DPIGATE_LAUNCH_AGENTS_DIR -u DPIGATE_APP_LOG HOME="$A3/home" STATE_DIR="$
 APP_PID=$!; app_exit
 check "HOME: Auto Start entry and log go under \$HOME/Library" '[ -f "$A3/home/Library/LaunchAgents/org.dpigate.menubar.plist" ] && [ -f "$A3/home/Library/Logs/DPIGate/dpigate.log" ]'
 
-# (e) apps.txt is created on first launch with Discord; the app is left in place when edited
-check "apps.txt created with Discord" '[ "$(cat "$A/AppSupport/DPIGate/config/apps.txt")" = "/Applications/Discord.app" ]'
+# (m) the menu: no Bypass All, Program Filters or Launch items (removed; the system proxy is always set)
+M=$ROOT/m; mkdir -p "$M"; fake_launchctl "$M"; make_fake "$M"
+app_env "$M" DPIGATE_APP_SCRIPT="$M/fake" DPIGATE_APP_ACTION=menu-dump
+app_exit
+check "menu lists the expected items" 'grep -q "menu: Only Listed Sites" "$M/Logs/DPIGate/dpigate.log" && grep -q "menu: Auto Start" "$M/Logs/DPIGate/dpigate.log" && grep -q "menu: Uninstall" "$M/Logs/DPIGate/dpigate.log"'
+check "menu has no Bypass All, Program Filters or Launch item" '! grep "^menu:" "$M/Logs/DPIGate/dpigate.log" | grep -q -i -e bypass -e "program" -e launch'
+check "no apps.txt is created any more" '[ ! -e "$M/AppSupport/DPIGate/config/apps.txt" ]'
 
-# (b) Bypass All off: the proxy runs, system proxy settings and launchctl env stay untouched
-bypass_case() { # <name> <bypass_all value or empty>
+# (b) The system proxy is always set, also with an old bypass_all=0 in the config (the key is ignored)
+bypass_case() { # <name> <old bypass_all value or empty>
   local d=$ROOT/$1; mkdir -p "$d/AppSupport/DPIGate/config"
   make_fakes "$d"; fake_launchctl_keep "$d"
   export FAKE=$d/fake
@@ -130,16 +135,16 @@ CAND="Good|127.0.0.1|9"   # unreachable on purpose: the measurement result is ir
 B1=$ROOT/b1
 bypass_case b1 0 "$CAND"
 F=$B1/fake
-check "bypass off: proxy started" '[ -s "$F/proxy_args" ]'
-check "bypass off: no networksetup -set*proxy*" '! grep -q -e "^-set.*proxy" "$F/calls.log"'
-check "bypass off: no launchctl setenv/unsetenv" '! grep -q -e "^LAUNCHCTL setenv" -e "^LAUNCHCTL unsetenv" "$F/calls.log"'
-check "bypass off: DNS cache is still flushed" 'grep -q "^DSCACHE -flushcache" "$F/calls.log"'
+check "old bypass_all=0: proxy started" '[ -s "$F/proxy_args" ]'
+check "old bypass_all=0: run is called without --no-system-proxy" 'grep -q "app: starting .* run" "$B1/Logs/DPIGate/dpigate.log" && ! grep -q -e "--no-system-proxy" "$B1/Logs/DPIGate/dpigate.log"'
+check "old bypass_all=0: SOCKS, web, secure web set" 'grep -q "^-setsocksfirewallproxy " "$F/calls.log" && grep -q "^-setwebproxy " "$F/calls.log" && grep -q "^-setsecurewebproxy " "$F/calls.log"'
+check "old bypass_all=0: launchctl setenv HTTPS_PROXY" 'grep -q "^LAUNCHCTL setenv HTTPS_PROXY" "$F/calls.log"'
+check "old bypass_all=0: DNS cache flushed" 'grep -q "^DSCACHE -flushcache" "$F/calls.log"'
 B2=$ROOT/b2
 bypass_case b2 "" "$CAND"
 F=$B2/fake
-check "bypass on (default): SOCKS, web, secure web set" 'grep -q "^-setsocksfirewallproxy " "$F/calls.log" && grep -q "^-setwebproxy " "$F/calls.log" && grep -q "^-setsecurewebproxy " "$F/calls.log"'
-check "bypass on (default): launchctl setenv HTTPS_PROXY" 'grep -q "^LAUNCHCTL setenv HTTPS_PROXY" "$F/calls.log"'
-check "bypass on: settings restored after the app got SIGTERM" '[ "$(cat "$F/socks_enabled")" = no ] && [ "$(cat "$F/dns")" = 8.8.8.8 ]'
+check "no config: SOCKS, web, secure web set" 'grep -q "^-setsocksfirewallproxy " "$F/calls.log" && grep -q "^-setwebproxy " "$F/calls.log" && grep -q "^-setsecurewebproxy " "$F/calls.log"'
+check "settings restored after the app got SIGTERM" '[ "$(cat "$F/socks_enabled")" = no ] && [ "$(cat "$F/dns")" = 8.8.8.8 ]'
 
 # (c) DNS measurement: dead server n/a, poisoned answer invalid, good answer valid, selection reaches the proxy
 cat > "$ROOT/dnssrv.py" <<'EOF2'
@@ -189,13 +194,6 @@ check "forced index: DPIGATE_DNS is the chosen server" '[ "$(cat "$C/script_dns"
 kill -TERM "$APP_PID"; wait_for 12 gone "$APP_PID"; APP_PID=
 kill -KILL "$DNS_PID" 2>/dev/null; DNS_PID=
 
-# (e) Launch via DPIGate: proxy argument and environment
-E=$ROOT/e; mkdir -p "$E"; fake_launchctl "$E"; make_fake "$E"
-printf '#!/bin/bash\necho "$*" >> "%s/open.log"\n' "$E" > "$E/open"; chmod +x "$E/open"
-app_env "$E" DPIGATE_APP_SCRIPT="$E/fake" DPIGATE_PORT=4321 DPIGATE_APP_OPEN="$E/open" DPIGATE_APP_ACTION="launch:/Applications/Fake.app"
-app_exit
-check "open gets proxy env and --proxy-server" 'grep -q -e "-a /Applications/Fake.app --env HTTPS_PROXY=http://127.0.0.1:4321 --env HTTP_PROXY=http://127.0.0.1:4321 --args --proxy-server=socks5://127.0.0.1:4321" "$E/open.log"'
-
 # (d) Uninstall: Turn Off (SIGINT -> restore), LaunchAgent and folders gone, app exits
 D=$ROOT/d; mkdir -p "$D/LA"; fake_launchctl "$D"; make_fake "$D"
 echo placeholder > "$D/LA/org.dpigate.menubar.plist"
@@ -214,23 +212,23 @@ printf 'bypass_all=0\nsite_mode=1\n' > "$F1/AppSupport/DPIGate/config/config"
 app_env "$F1" DPIGATE_APP_SCRIPT="$F1/fake" DPIGATE_APP_AUTOSTART=1
 wait_for 10 has_line "$F1/calls" "call run"
 check "site mode on: sites.txt created with the Discord defaults" '[ "$(grep -v "^#" "$F1/AppSupport/DPIGate/config/sites.txt" | paste -sd " " -)" = "${DEFS#:}" ]'
-check "site mode on: run gets -- -H <defaults> -An" 'has_line "$F1/calls" "^call run --no-system-proxy -- -H $DEFS -An\$"'
+check "site mode on: run gets -- -H <defaults> -An" 'has_line "$F1/calls" "^call run -- -H $DEFS -An\$"'
 : > "$F1/calls"
 printf '# my sites\nExample.ORG   # note\n*.sub.example.net\nbad_domain!\n\n' > "$F1/AppSupport/DPIGate/config/sites.txt"
 wait_for 10 has_line "$F1/calls" "call run"
-check "edited site list restarts the proxy with the new list (lowercase, wildcard stripped, invalid and notes dropped)" 'has_line "$F1/calls" "^call run --no-system-proxy -- -H :example.org sub.example.net -An\$"'
+check "edited site list restarts the proxy with the new list (lowercase, wildcard stripped, invalid and notes dropped)" 'has_line "$F1/calls" "^call run -- -H :example.org sub.example.net -An\$"'
 : > "$F1/calls"
 printf '# nothing\n' > "$F1/AppSupport/DPIGate/config/sites.txt"
 wait_for 10 has_line "$F1/calls" "call run"
-check "empty list falls back to a host that never occurs (ByeDPI rejects an empty list)" 'has_line "$F1/calls" "^call run --no-system-proxy -- -H :dpigate.invalid -An\$"'
+check "empty list falls back to a host that never occurs (ByeDPI rejects an empty list)" 'has_line "$F1/calls" "^call run -- -H :dpigate.invalid -An\$"'
 stop_app
 
 F2=$ROOT/f2; mkdir -p "$F2/AppSupport/DPIGate/config"; fake_launchctl "$F2"; make_fake "$F2"
 printf 'bypass_all=0\n' > "$F2/AppSupport/DPIGate/config/config"
 app_env "$F2" DPIGATE_APP_SCRIPT="$F2/fake" DPIGATE_APP_AUTOSTART=1 DPIGATE_APP_ACTION=site-toggle
-wait_for 10 has_line "$F2/calls" "^call run --no-system-proxy -- -H"
-check "site mode off by default: first run has no host list" 'has_line "$F2/calls" "^call run --no-system-proxy\$"'
-check "toggling on restarts the proxy with the host list" 'has_line "$F2/calls" "^call run --no-system-proxy -- -H $DEFS -An\$"'
+wait_for 10 has_line "$F2/calls" "^call run -- -H"
+check "site mode off by default: first run has no host list" 'has_line "$F2/calls" "^call run\$"'
+check "toggling on restarts the proxy with the host list" 'has_line "$F2/calls" "^call run -- -H $DEFS -An\$"'
 check "toggle is saved as site_mode=1" 'has_line "$F2/AppSupport/DPIGate/config/config" "^site_mode=1\$" && has_line "$F2/AppSupport/DPIGate/config/config" "^bypass_all=0\$"'
 stop_app
 

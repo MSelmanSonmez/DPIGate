@@ -1,5 +1,5 @@
 // DPIGate menu bar app: starts and stops `dpigate run` from the menu bar and offers the same
-// settings as the Linux tray (DNS, bypass mode, program filters, auto start, uninstall).
+// settings as the Linux tray (DNS, site list, auto start, uninstall).
 // All system changes stay in the dpigate script; this app only supervises it.
 import AppKit
 import Darwin
@@ -113,9 +113,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     let statusLine = NSMenuItem(title: "", action: nil, keyEquivalent: "")
     let toggleItem = NSMenuItem(title: "", action: #selector(toggle), keyEquivalent: "")
     let dnsItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
-    let bypassItem = NSMenuItem(title: "Bypass All Traffic", action: #selector(toggleBypass), keyEquivalent: "")
     let siteItem = NSMenuItem(title: "Only Listed Sites (site list)", action: #selector(toggleSiteMode), keyEquivalent: "")
-    let launchItem = NSMenuItem(title: "Launch via DPIGate", action: nil, keyEquivalent: "")
     let autostartItem = NSMenuItem(title: "Auto Start", action: #selector(toggleAutostart), keyEquivalent: "")
 
     let agentLabel = "org.dpigate.menubar"
@@ -133,7 +131,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     var stateFile: String { stateDir + "/state" }
     var configDir: String { nonEmpty("DPIGATE_CONFIG_DIR") ?? stateDir + "/config" }
     var configFile: String { configDir + "/config" }
-    var appsFile: String { configDir + "/apps.txt" }
     var sitesFile: String { configDir + "/sites.txt" }
     var launchAgentsDir: String { nonEmpty("DPIGATE_LAUNCH_AGENTS_DIR") ?? home + "/Library/LaunchAgents" }
     var agentPath: String { launchAgentsDir + "/" + agentLabel + ".plist" }
@@ -157,17 +154,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         try? text.write(toFile: configFile, atomically: true, encoding: .utf8)
     }
 
-    var bypassAll: Bool { (readConfig()["bypass_all"] ?? "1") != "0" }
     /// "Only Listed Sites": the proxy applies its DPI tricks to the hosts in sites.txt only (default off).
     var siteMode: Bool { (readConfig()["site_mode"] ?? "0") == "1" }
     var configuredDNSIndex: Int { Int(readConfig()["dns_index"] ?? "") ?? -1 }
-
-    func ensureAppsFile() {
-        try? FileManager.default.createDirectory(atPath: configDir, withIntermediateDirectories: true)
-        if !FileManager.default.fileExists(atPath: appsFile) {
-            try? "/Applications/Discord.app\n".write(toFile: appsFile, atomically: true, encoding: .utf8)
-        }
-    }
 
     static let defaultSites = ["discord.com", "discord.gg", "discordapp.com", "discordapp.net", "discord.media", "discordcdn.com"]
 
@@ -207,12 +196,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         return ["--", "-H", ":" + (list.isEmpty ? "dpigate.invalid" : list.joined(separator: " ")), "-An"]
     }
 
-    func programs() -> [String] {
-        guard let t = try? String(contentsOfFile: appsFile, encoding: .utf8) else { return [] }
-        return t.split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }
-            .filter { !$0.isEmpty && !$0.hasPrefix("#") }
-    }
-
     // MARK: launch
 
     func applicationDidFinishLaunching(_ n: Notification) {
@@ -228,7 +211,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         logHandle = FileHandle(forWritingAtPath: logPath)
         _ = try? logHandle?.seekToEnd()
-        ensureAppsFile()
         ensureSitesFile()
         if let c = nonEmpty("DPIGATE_APP_DNS_CANDIDATES") {   // test hook: "name|ip|port;name|ip|port"
             candidates = c.split(separator: ";").compactMap {
@@ -302,15 +284,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         dnsItem.submenu = NSMenu()
         m.addItem(dnsItem)
         m.addItem(.separator())
-        let edit = NSMenuItem(title: "Edit Program Filters (apps launched via DPIGate)", action: #selector(editPrograms), keyEquivalent: "")
-        edit.target = self
-        m.addItem(edit)
-        launchItem.submenu = NSMenu()
-        m.addItem(launchItem)
-        bypassItem.target = self
-        m.addItem(bypassItem)
         siteItem.target = self
-        siteItem.toolTip = "On: DPI tricks only for the sites in the list; everything else passes unchanged. Works with Bypass All (Safari, system-wide) and with Launch via DPIGate."
+        siteItem.toolTip = "On: DPI tricks only for the sites in the list; everything else passes unchanged."
         m.addItem(siteItem)
         let editSites = NSMenuItem(title: "Edit Site List", action: #selector(editSites), keyEquivalent: "")
         editSites.target = self
@@ -337,32 +312,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     func menuNeedsUpdate(_ menu: NSMenu) { refreshDynamicItems() }
 
     func refreshDynamicItems() {
-        bypassItem.state = bypassAll ? .on : .off
         siteItem.state = siteMode ? .on : .off
         autostartItem.state = FileManager.default.fileExists(atPath: agentPath) ? .on : .off
         rebuildDNSMenu()
-        rebuildLaunchMenu()
-    }
-
-    func rebuildLaunchMenu() {
-        guard let sub = launchItem.submenu else { return }
-        sub.removeAllItems()
-        sub.autoenablesItems = false
-        let apps = programs()
-        for path in apps {
-            let name = ((path as NSString).lastPathComponent as NSString).deletingPathExtension
-            let exists = FileManager.default.fileExists(atPath: path)
-            let i = NSMenuItem(title: exists ? name : name + " (not found)", action: #selector(launchProgram(_:)), keyEquivalent: "")
-            i.target = self
-            i.representedObject = path
-            i.isEnabled = exists && state == .running
-            sub.addItem(i)
-        }
-        if apps.isEmpty { sub.addItem(disabled("No programs - use Edit Program Filters")) }
-        if state != .running {
-            sub.addItem(.separator())
-            sub.addItem(disabled("Turn DPIGate on to launch programs"))
-        }
     }
 
     func disabled(_ t: String) -> NSMenuItem {
@@ -384,7 +336,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         toggleItem.isEnabled = state != .stopping
         statusItem.setIcon(on: state == .running || state == .starting)
         statusItem.button?.toolTip = "DPIGate: " + text
-        rebuildLaunchMenu()
     }
 
     @objc func toggle() {
@@ -492,14 +443,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         stop()
     }
 
-    @objc func toggleBypass() {
-        let on = !bypassAll
-        setConfig("bypass_all", on ? "1" : "0")
-        bypassItem.state = on ? .on : .off
-        let mode = on ? "all traffic" : "per-program"
-        if child?.isRunning == true { restartIfActive("bypass mode: \(mode)") } else { notify("Bypass mode: \(mode)") }
-    }
-
     @objc func toggleSiteMode() {
         let on = !siteMode
         setConfig("site_mode", on ? "1" : "0")
@@ -519,7 +462,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         restartIfActive("site list changed")
     }
 
-    // MARK: program filters
+    // MARK: open in editor
 
     func openCommand(_ args: [String]) {
         let p = Process()
@@ -527,30 +470,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         p.arguments = args
         p.standardInput = FileHandle.nullDevice
         do { try p.run() } catch { log("app: cannot run open: \(error)") }
-    }
-
-    @objc func editPrograms() {
-        ensureAppsFile()
-        openCommand(["-e", appsFile])
-    }
-
-    @objc func launchProgram(_ item: NSMenuItem) {
-        if let path = item.representedObject as? String { launchProgram(path: path) }
-    }
-
-    /// Starts an app with the proxy: `open --env` hands the environment to LaunchServices
-    /// (Electron's updater reads HTTPS_PROXY) and --proxy-server covers Chromium's own network stack.
-    func launchProgram(path: String) {
-        let name = ((path as NSString).lastPathComponent as NSString).deletingPathExtension
-        if let bid = Bundle(url: URL(fileURLWithPath: path))?.bundleIdentifier,
-           !NSRunningApplication.runningApplications(withBundleIdentifier: bid).isEmpty {
-            notify("\(name) is already running - quit it first, then launch it via DPIGate")
-            return
-        }
-        let url = "http://127.0.0.1:\(port)"
-        log("app: launching \(path) via the proxy")
-        openCommand(["-a", path, "--env", "HTTPS_PROXY=\(url)", "--env", "HTTP_PROXY=\(url)",
-                     "--args", "--proxy-server=socks5://127.0.0.1:\(port)"])
     }
 
     // MARK: auto start
@@ -635,6 +554,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         shutdownBlocking()
         if FileManager.default.fileExists(atPath: stateFile) { runBlocking(["restore"]) }
         setAutostart(false)
+        // apps.txt: older versions created it; clean it up too.
         wipe(configDir, default: defaultStateDir + "/config", files: ["config", "apps.txt", "sites.txt"])
         wipe(stateDir, default: defaultStateDir, files: ["state", "state.tmp", "app.lock"])
         wipe((logPath as NSString).deletingLastPathComponent, default: (defaultLogPath as NSString).deletingLastPathComponent,
@@ -662,9 +582,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         case "uninstall": uninstall()
         case "site-toggle": toggleSiteMode()   // stays running; the test stops the app itself
         case "dns-detect": break   // finishes when the measurement does
+        case "menu-dump":
+            for i in statusItem.menu?.items ?? [] where !i.isSeparatorItem { log("menu: \(i.title)") }
+            finishAction()
         default:
-            if a.hasPrefix("launch:") { launchProgram(path: String(a.dropFirst(7))); DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { self.finishAction() } }
-            else { log("app: unknown action \(a)"); finishAction() }
+            log("app: unknown action \(a)"); finishAction()
         }
     }
 
@@ -696,7 +618,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         p.executableURL = URL(fileURLWithPath: "/bin/bash")
         let extra = proxyArgs()
         startedArgs = extra
-        p.arguments = [scriptPath, "run"] + (bypassAll ? [] : ["--no-system-proxy"]) + extra
+        p.arguments = [scriptPath, "run"] + extra
         var e = env
         e["DPIGATE_DNS"] = dnsValue()
         p.environment = e
@@ -724,7 +646,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         p.terminationHandler = { [weak self] proc in
             DispatchQueue.main.async { self?.childExited(gen, status: proc.terminationStatus) }
         }
-        log("app: starting \(scriptPath) run" + (bypassAll ? "" : " --no-system-proxy") + (extra.isEmpty ? "" : " " + extra.joined(separator: " ")) + " (DNS \(dnsValue()))")
+        log("app: starting \(scriptPath) run" + (extra.isEmpty ? "" : " " + extra.joined(separator: " ")) + " (DNS \(dnsValue()))")
         do { try p.run() } catch {
             log("app: cannot start: \(error)")
             notify("Could not start dpigate - see log")

@@ -347,8 +347,6 @@ wait_for_listener() {
 }
 
 cmd_run() {
-  local system_proxy=1
-  while [ "${1:-}" = "--no-system-proxy" ]; do system_proxy=0; shift; done
   [ "${1:-}" = "--" ] && shift
   [ -x "$PROXY_BIN" ] || die "proxy binary not found: $PROXY_BIN (build it with: make -C macos)"
   local svc comm
@@ -393,30 +391,24 @@ cmd_run() {
   fi
   comm=$(ps -p "$PROXY_PID" -o comm= 2>/dev/null </dev/null)
   local url=http://127.0.0.1:$DPIGATE_PORT
-  if [ "$system_proxy" = 1 ]; then
-    SOCKS_APPLIED=1 WEB_APPLIED=1 ENV_APPLIED=1
-    write_state "$svc" "$comm" || die "cannot write state file $STATE_FILE"
+  SOCKS_APPLIED=1 WEB_APPLIED=1 ENV_APPLIED=1
+  write_state "$svc" "$comm" || die "cannot write state file $STATE_FILE"
 
-    ns_set -setsocksfirewallproxy "$svc" 127.0.0.1 "$DPIGATE_PORT" \
-      && ns_set -setsocksfirewallproxystate "$svc" on \
-      && ns_set -setproxybypassdomains "$svc" $DPIGATE_BYPASS \
-      && ns_set -setwebproxy "$svc" 127.0.0.1 "$DPIGATE_PORT" \
-      && ns_set -setwebproxystate "$svc" on \
-      && ns_set -setsecurewebproxy "$svc" 127.0.0.1 "$DPIGATE_PORT" \
-      && ns_set -setsecurewebproxystate "$svc" on \
-      || die "could not apply settings; restoring the previous ones"
+  ns_set -setsocksfirewallproxy "$svc" 127.0.0.1 "$DPIGATE_PORT" \
+    && ns_set -setsocksfirewallproxystate "$svc" on \
+    && ns_set -setproxybypassdomains "$svc" $DPIGATE_BYPASS \
+    && ns_set -setwebproxy "$svc" 127.0.0.1 "$DPIGATE_PORT" \
+    && ns_set -setwebproxystate "$svc" on \
+    && ns_set -setsecurewebproxy "$svc" 127.0.0.1 "$DPIGATE_PORT" \
+    && ns_set -setsecurewebproxystate "$svc" on \
+    || die "could not apply settings; restoring the previous ones"
 
-    # Only applications started from now on inherit these.
-    "$LAUNCHCTL" setenv HTTPS_PROXY "$url" </dev/null >/dev/null 2>&1 \
-      && "$LAUNCHCTL" setenv HTTP_PROXY "$url" </dev/null >/dev/null 2>&1 \
-      || die "could not set HTTPS_PROXY/HTTP_PROXY; restoring the previous settings"
-    echo "dpigate: running on '$svc' (SOCKS5 + HTTP 127.0.0.1:$DPIGATE_PORT, DNS $DPIGATE_SYSTEM_DNS). Press Ctrl-C to stop."
-  else
-    # Per-program mode: the proxy runs, system proxy settings and launchctl stay untouched.
-    write_state "$svc" "$comm" || die "cannot write state file $STATE_FILE"
-    echo "dpigate: running on '$svc' (SOCKS5 + HTTP 127.0.0.1:$DPIGATE_PORT, DNS $DPIGATE_SYSTEM_DNS, system proxy untouched). Press Ctrl-C to stop."
-  fi
-  [ "$system_proxy" = 1 ] && echo "dpigate: Restart apps such as Discord after starting dpigate; HTTPS_PROXY only reaches apps launched afterwards."
+  # Only applications started from now on inherit these.
+  "$LAUNCHCTL" setenv HTTPS_PROXY "$url" </dev/null >/dev/null 2>&1 \
+    && "$LAUNCHCTL" setenv HTTP_PROXY "$url" </dev/null >/dev/null 2>&1 \
+    || die "could not set HTTPS_PROXY/HTTP_PROXY; restoring the previous settings"
+  echo "dpigate: running on '$svc' (SOCKS5 + HTTP 127.0.0.1:$DPIGATE_PORT, DNS $DPIGATE_SYSTEM_DNS). Press Ctrl-C to stop."
+  echo "dpigate: Restart apps such as Discord after starting dpigate; HTTPS_PROXY only reaches apps launched afterwards."
   while pid_alive "$PROXY_PID"; do
     wait "$PROXY_PID"
   done
@@ -465,7 +457,7 @@ cmd_help() {
   cat <<'EOF'
 Usage: dpigate <command>
 
-  run [--no-system-proxy] [-- <proxy args>]
+  run [-- <proxy args>]
                           set DNS (1.1.1.1, 1.0.0.1), flush the DNS cache (macOS asks for your
                           password once), start the proxy (SOCKS5 + HTTP CONNECT on one port), then set the
                           system SOCKS/web/secure web proxies and HTTPS_PROXY/HTTP_PROXY for apps
@@ -474,7 +466,6 @@ Usage: dpigate <command>
   status                  show whether the proxy runs and the current proxy/DNS settings
   help                    show this text
 
---no-system-proxy leaves the system proxy settings and launchctl alone (only the proxy, DNS and cache).
 Environment: NETWORKSETUP, ROUTE, PROXY_BIN, STATE_DIR, DPIGATE_PORT (default 1080), DPIGATE_DNS (proxy
 resolver servers, "ip[:port] ..."), DPIGATE_SYSTEM_DNS (system DNS, derived from DPIGATE_DNS when unset),
 DSCACHEUTIL, LAUNCHCTL, OSASCRIPT, RESOLVE_CMD, DPIGATE_PROBE (default discord.com), DPIGATE_WARMUP_SECS (default 5).

@@ -326,20 +326,6 @@ test_16_dns_names_split_proxy_and_system() {
   finish "DPIGATE_DNS (proxy) and system DNS are separate"
 }
 
-test_17_no_system_proxy() {
-  setup no "" 0 "8.8.8.8" "localhost"
-  /bin/bash "$DPIGATE" run --no-system-proxy </dev/null >"$T/run.out" 2>&1 &
-  RUN_PID=$!
-  wait_for "grep -q 'running on' '$T/run.out'"
-  check "proxy started" "[ -s '$FAKE/proxy_args' ]"
-  check "system proxy untouched while running" "! grep -q -e '^-set.*proxy' '$FAKE/calls.log' && [ \"\$(cat '$FAKE/socks_enabled')\" = no ]"
-  check "DNS still switched" "grep -qx -- '-setdnsservers Test Ethernet 1.1.1.1 1.0.0.1' '$FAKE/calls.log'"
-  kill -INT "$RUN_PID"; wait "$RUN_PID" 2>/dev/null; RUN_PID=
-  check "no proxy or launchctl change at all" "! grep -q -e '^-set.*proxy' -e '^LAUNCHCTL setenv' -e '^LAUNCHCTL unsetenv' '$FAKE/calls.log'"
-  check "old DNS back, state file gone" "[ \"\$(cat '$FAKE/dns')\" = 8.8.8.8 ] && [ ! -f '$STATE_DIR/state' ]"
-  finish "run --no-system-proxy leaves system proxy settings and launchctl alone"
-}
-
 trap 'teardown; rm -rf "$ROOT"' EXIT
 
 test_1_run_applies_then_int_restores
@@ -358,7 +344,6 @@ test_13_proxy_fails_no_web_or_env
 test_14_old_state_file_restore
 test_15_proxy_args_socks_and_http
 test_16_dns_names_split_proxy_and_system
-test_17_no_system_proxy
 
 iso_guard_end
 echo "SUMMARY: $PASSED passed, $FAILED failed"
