@@ -115,7 +115,7 @@ for base in $BASES; do
         rm -rf -- "$cand" 2>/dev/null || continue
     fi
     mkdir -m 0755 "$cand" 2>/dev/null || continue
-    mkdir -m 0755 "$cand/app" "$cand/data" "$cand/cfg" "$cand/home" || { rm -rf -- "$cand"; continue; }
+    mkdir -m 0755 "$cand/app" "$cand/data" "$cand/cfg" "$cand/fakehome" || { rm -rf -- "$cand"; continue; }
     # Programs must be able to run from here (/run is "noexec" on some hosts).
     if ! cp /bin/true "$cand/.exectest" 2>/dev/null || ! "$cand/.exectest" 2>/dev/null; then
         rm -rf -- "$cand"; continue

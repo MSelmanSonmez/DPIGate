@@ -65,8 +65,8 @@ die() {   # die CODE MESSAGE: tell the caller (exit code + stderr), clean up
 }
 
 # ── environment: nothing of the user's, nothing under a home directory ──────
-export HOME="$RD/home"
-export XDG_DATA_HOME="$RD/home/.local/share" XDG_CONFIG_HOME="$RD/home/.config" XDG_CACHE_HOME="$RD/home/.cache"
+export HOME="$RD/fakehome"
+export XDG_DATA_HOME="$HOME/.local/share" XDG_CONFIG_HOME="$HOME/.config" XDG_CACHE_HOME="$HOME/.cache"
 mkdir -p "$XDG_DATA_HOME" "$XDG_CONFIG_HOME" "$XDG_CACHE_HOME"
 export PLAT_LOG="$DATA/platform.log" PLAT_STATE_DIR="$DATA"
 export GDPI_DATA_DIR="$DATA" GDPI_CONFIG_DIR="$CFG" GDPI_PROGRAMS="$CFG/ProgramFilters"
