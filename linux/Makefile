@@ -33,8 +33,16 @@ SRCS += $(BYPASS_SRCS) goodbyedpi.c
 
 OBJS    = $(SRCS:.c=.o)
 
+# The daemon also looks for its libraries in $ORIGIN/lib, so an AppImage (or
+# any other relocated tree) can ship libnetfilter_queue/libnfnetlink/libmnl
+# next to the binary. RUNPATH rather than LD_LIBRARY_PATH: a binary with file
+# capabilities runs in secure-execution mode, which ignores LD_LIBRARY_PATH.
+# On a distro build the path simply does not exist and the system libraries
+# are used as before.
+TARGET_RPATH = -Wl,-rpath,'$$ORIGIN/lib'
+
 $(TARGET): $(OBJS)
-	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $(OBJS) $(LIBS)
+	$(CC) $(CFLAGS) $(LDFLAGS) $(TARGET_RPATH) -o $@ $(OBJS) $(LIBS)
 
 # Smoke test — NFQUEUE passthrough
 smoke_test: smoke_test.o packet_io_linux.o rawsend_linux.o
