@@ -5,6 +5,7 @@ set -u
 HERE=$(cd "$(dirname "$0")" && pwd)
 MAC=$HERE/..
 ROOT=$(mktemp -d "${TMPDIR:-/tmp}/dpigate-installtest.XXXXXX") || exit 1
+. "$(cd "$(dirname "$0")" && pwd)/isolate.sh"; iso_init
 PASSED=0 FAILED=0
 trap 'rm -rf "$ROOT"' EXIT
 
@@ -31,6 +32,8 @@ out=$(bash "$R/install.sh" 2>&1); rc=$?
 check "install: exits 0 and creates the install dir" '[ $rc = 0 ] && [ -d "$INST/DPIGate.app" ]'
 check "install: app content copied" '[ "$(cat "$INST/DPIGate.app/Contents/MacOS/DPIGate")" = v1 ]'
 check "install: quarantine attribute removed from the copy" '! xattr "$INST/DPIGate.app" | grep -q quarantine'
+# Never let a later step execute a quarantined file (Gatekeeper would pop a dialog): strip the flag test-side now.
+xattr -dr com.apple.quarantine "$INST/DPIGate.app" "$R/DPIGate.app" 2>/dev/null
 check "install: source app left alone" '[ -d "$R/DPIGate.app" ]'
 check "install: no temp copy left behind" '[ "$(ls -A "$INST")" = DPIGate.app ]'
 check "install: prints next steps, does not open" 'echo "$out" | grep -q "menu bar"'
@@ -89,5 +92,6 @@ check "dist: zip has DPIGate-macos/install.sh, uninstall.sh and DPIGate.app" 'ec
 check "dist: nothing outside DPIGate-macos/ (no __MACOSX)" '! echo "$LIST" | grep -v "^DPIGate-macos/" | grep -q .'
 check "dist: scripts in the zip are executable" 'unzip -Zv "$ZIP" DPIGate-macos/install.sh 2>/dev/null | grep -q "Unix file attributes.*755"'
 
+iso_guard_end
 echo "$PASSED passed, $FAILED failed"
 [ $FAILED -eq 0 ]

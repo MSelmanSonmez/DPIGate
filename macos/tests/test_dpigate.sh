@@ -7,6 +7,7 @@ set -m   # background jobs get default signal handling, so INT can reach dpigate
 HERE=$(cd "$(dirname "$0")" && pwd)
 DPIGATE=${DPIGATE_SCRIPT:-$HERE/../dpigate}
 ROOT=$(mktemp -d "${TMPDIR:-/tmp}/dpigate-test.XXXXXX") || exit 1
+. "$(cd "$(dirname "$0")" && pwd)/isolate.sh"; iso_init
 PASSED=0
 FAILED=0
 RUN_PID=
@@ -359,5 +360,6 @@ test_15_proxy_args_socks_and_http
 test_16_dns_names_split_proxy_and_system
 test_17_no_system_proxy
 
+iso_guard_end
 echo "SUMMARY: $PASSED passed, $FAILED failed"
 [ "$FAILED" -eq 0 ]

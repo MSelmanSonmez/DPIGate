@@ -9,6 +9,7 @@ DPIGATE=${DPIGATE_SCRIPT:-$HERE/../dpigate}
 APPBIN=${DPIGATE_APP_BIN:-$HERE/../build/DPIGate.app/Contents/MacOS/DPIGate}
 APPBIN=$(cd "$(dirname "$APPBIN")" && pwd -P)/$(basename "$APPBIN")
 ROOT=$(mktemp -d "${TMPDIR:-/tmp}/dpigate-menutest.XXXXXX") || exit 1
+. "$(cd "$(dirname "$0")" && pwd)/isolate.sh"; iso_init
 PASSED=0 FAILED=0 APP_PID= DNS_PID=
 . "$HERE/fakes.sh"
 
@@ -92,6 +93,13 @@ app_env "$A2" DPIGATE_APP_SCRIPT="$A2/fake" DPIGATE_APP_ACTION=noop
 app_exit
 check "no Auto Start entry: none is created" '[ ! -e "$P2" ]'
 
+# (a3) HOME decides the default LaunchAgents and log folders (NSHomeDirectory ignores HOME)
+A3=$ROOT/a3; mkdir -p "$A3/home"; fake_launchctl "$A3"; make_fake "$A3"
+env -u DPIGATE_LAUNCH_AGENTS_DIR -u DPIGATE_APP_LOG HOME="$A3/home" STATE_DIR="$A3/AS" LAUNCHCTL="$A3/launchctl" \
+    DPIGATE_APP_NOTIFY_LOG="$A3/notify" DPIGATE_APP_SCRIPT="$A3/fake" DPIGATE_APP_ACTION=autostart-on "$APPBIN" </dev/null >"$A3/out" 2>&1 &
+APP_PID=$!; app_exit
+check "HOME: Auto Start entry and log go under \$HOME/Library" '[ -f "$A3/home/Library/LaunchAgents/org.dpigate.menubar.plist" ] && [ -f "$A3/home/Library/Logs/DPIGate/dpigate.log" ]'
+
 # (e) apps.txt is created on first launch with Discord; the app is left in place when edited
 check "apps.txt created with Discord" '[ "$(cat "$A/AppSupport/DPIGate/config/apps.txt")" = "/Applications/Discord.app" ]'
 
@@ -173,6 +181,7 @@ check "auto: DPIGATE_DNS is the valid server" '[ "$(cat "$C/script_dns")" = "127
 kill -TERM "$APP_PID"; wait_for 12 gone "$APP_PID"; APP_PID=
 # forced selection (saved index 0 = the dead one) is used as is
 printf 'dns_index=0\n' > "$C/AppSupport/DPIGate/config/config"
+: > "$C/calls"   # else the first run's "call run" satisfies the wait below
 app_env "$C" DPIGATE_APP_SCRIPT="$C/fake" DPIGATE_APP_AUTOSTART=1 DPIGATE_APP_DNS_CANDIDATES="$CANDS"
 wait_for 15 has_line "$C/calls" "call run"
 sleep 0.5
@@ -237,5 +246,6 @@ wait_for 20 has_line "$G/Logs/DPIGate/dpigate.log" "running on"
 stop_app
 check "real script: proxy args are '... --tlsrec 1+s -H <list> -An'" 'grep -q -e "--tlsrec 1+s -H $DEFS -An\$" "$FAKE/proxy_args"'
 
+iso_guard_end
 echo "$PASSED passed, $FAILED failed"
 [ $FAILED -eq 0 ]

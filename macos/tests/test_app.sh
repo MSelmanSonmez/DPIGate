@@ -5,6 +5,7 @@ set -u
 HERE=$(cd "$(dirname "$0")" && pwd)
 APPBIN=${DPIGATE_APP_BIN:-$HERE/../build/DPIGate.app/Contents/MacOS/DPIGate}
 ROOT=$(mktemp -d "${TMPDIR:-/tmp}/dpigate-apptest.XXXXXX") || exit 1
+. "$(cd "$(dirname "$0")" && pwd)/isolate.sh"; iso_init
 PASSED=0 FAILED=0 APP_PID=
 
 cleanup() { [ -n "$APP_PID" ] && kill "$APP_PID" 2>/dev/null; rm -rf "$ROOT"; }
@@ -108,5 +109,6 @@ check "script got run only once" '[ "$(count "$D/calls" "call run")" = 1 ]'
 check "first copy keeps running and was not stopped" 'kill -0 "$FIRST" 2>/dev/null && ! has_line "$D/calls" "signal"'
 kill -TERM "$FIRST"; wait_for 12 gone "$FIRST"; APP_PID=
 
+iso_guard_end
 echo "$PASSED passed, $FAILED failed"
 [ $FAILED -eq 0 ]
