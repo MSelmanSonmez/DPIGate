@@ -8,7 +8,7 @@
 [![Linux CI](https://github.com/MSelmanSonmez/DPIGate/actions/workflows/linux.yml/badge.svg)](../../actions/workflows/linux.yml)
 [![macOS CI](https://github.com/MSelmanSonmez/DPIGate/actions/workflows/macos.yml/badge.svg)](../../actions/workflows/macos.yml)
 
-**Per-program DPI bypass for Windows and Linux, site-list bypass for macOS (experimental).** A fork of
+**Per-program DPI bypass for Windows and Linux; on macOS (experimental) a system-proxy bypass for all sites or a site list.** A fork of
 [GoodbyeDPI](https://github.com/ValdikSS/GoodbyeDPI) that applies bypass tricks
 *only* to the programs you choose — browsers, Discord, whatever you list —
 while every other connection passes through untouched.
@@ -32,6 +32,10 @@ domains in a site list.
 
 ![DPIGate on Linux](gif/linux.gif)
 
+**macOS** (experimental) — menu bar app, DNS choice with measured latency, site list and Auto Start.
+
+![DPIGate on macOS](gif/macos.gif)
+
 ---
 
 ## Why this fork
@@ -46,6 +50,29 @@ domains in a site list.
 | Hidden background run | Console window visible | **Hidden** |
 | SNI DPI bypass | Manual `-5`/`-9` flags | **Auto** via a config variable |
 | Linux support | Windows only | **Yes** — native NFQUEUE port, same gate |
+
+---
+
+## Platform differences
+
+macOS support is experimental and does much less than the Windows and Linux
+versions. Windows and Linux run the same packet-level engine; macOS can only
+use a local proxy.
+
+| | Windows | Linux | macOS (experimental) |
+|---|---|---|---|
+| How it works | GoodbyeDPI engine, packet level (WinDivert) | Same engine, packet level (NFQUEUE) | ByeDPI SOCKS5/HTTP proxy, set as the system proxy |
+| Which traffic | Programs in the filter list | Programs in the filter list | Only apps that follow the system proxy (Firefox needs "Use system proxy settings") |
+| Per-program filter list | Yes | Yes | No |
+| Bypass All Traffic | Toggle | Toggle | Always on by default: every site that goes through the system proxy gets the bypass |
+| Narrowing it down | Filter list of programs | Filter list of programs | Only Listed Sites: just the domains in a site list |
+| Fake packets, TTL tricks | Yes | Yes | No |
+| DNS auto-detection | Yes | Yes | Yes |
+
+On macOS, also keep in mind: it has been tested only on an Intel Mac with macOS 13 (Apple
+Silicon is untested), every start of the proxy asks for the administrator password, after
+switching between Wi-Fi and Ethernet you need to turn DPIGate off and on again, and the app
+is not notarized. The full list is in [Known limitations](#known-limitations).
 
 ---
 
@@ -81,11 +108,22 @@ To remove it: tray icon → **Uninstall**, or **Settings → Apps & features**.
 
 ### Linux
 
-There is no prebuilt package — the binary is compiled on your machine, so start
-by getting the sources (an AppImage can also be built from them with
-`linux/packaging/appimage/build-appimage.sh`. It either installs DPIGate or runs it
-**without installing** — one password prompt, nothing left behind, settings next to the
-AppImage; see the [Linux guide](docs/linux.md#appimage)):
+**AppImage (easiest).** Download `dpigate-<version>-x86_64.AppImage` from the
+[latest release](../../releases/latest), make it executable and open it:
+
+```bash
+chmod +x dpigate-*-x86_64.AppImage
+./dpigate-*-x86_64.AppImage
+```
+
+It asks whether to **install** DPIGate (menu entry, tray, optional start at
+login; uninstall from the tray menu) or to **run it without installing** (one
+password prompt, nothing left behind, settings kept next to the AppImage).
+Missing runtime packages are installed with your package manager; no compiler
+is needed. Details: [Linux guide](docs/linux.md#appimage).
+
+**From source.** The installer below compiles the engine on your machine.
+Clone the repository:
 
 ```bash
 git clone https://github.com/MSelmanSonmez/DPIGate.git
@@ -147,11 +185,11 @@ A menu bar app around a SOCKS5 proxy built on [ByeDPI](https://github.com/hufrea
 
 Tested on Intel macOS 13 (13.7.8); Apple Silicon builds are untested.
 
-There is no Bypass All or Program Filters item on macOS: what gets the bypass is chosen with the site list (Only Listed Sites) instead.
+There is no Program Filters item on macOS and no separate Bypass All switch: by default every site that goes through the system proxy gets the bypass. Only Listed Sites narrows it to the domains in a site list.
 
 ### Install
 
-Unpack the release zip and run the installer; it copies the app to `~/Applications` (no admin rights):
+Download `DPIGate-macos.zip` from the [latest release](../../releases/latest), unpack it and run the installer; it copies the app to `~/Applications` (no admin rights):
 
 ```sh
 cd DPIGate-macos
@@ -214,7 +252,7 @@ The proxy resolves names itself (plain UDP DNS, 1 s timeout, cached) so a stalle
 ### Known limitations
 
 - Switching between Wi-Fi and Ethernet may not apply the proxy to the new network service. Turn DPIGate off and on again after switching.
-- No Bypass All or Program Filters on macOS; selection is by site list only.
+- No per-program filter list on macOS. By default every site gets the bypass; Only Listed Sites limits it to a site list.
 - Apple Silicon (arm64) builds are untested.
 - Each restart of the proxy (turning on, changing DNS, toggling Only Listed Sites, saving the site list) asks for the administrator password.
 - Not notarized, so the first launch needs the approval steps above.
