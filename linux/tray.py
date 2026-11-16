@@ -38,6 +38,7 @@ import fcntl
 # Defined before the GTK import so `tray.py --check-running` works on a host
 # that has no PyGObject yet (AppRun asks before it installs anything).
 _instance_lock = None   # the open lock file; kept for the life of the process
+EXIT_ALREADY_RUNNING = 75   # exit status of a second tray (see main())
 
 
 def _lock_dir(create):
@@ -1022,7 +1023,10 @@ def main():
     # engine as "exited unexpectedly" when the first tray stops it.
     if not _acquire_single_instance():
         sys.stderr.write("[tray] another DPIGate tray is already running; exiting\n")
-        sys.exit(0)
+        # A status of its own: not 0 (nothing was started here) and not the generic 1
+        # (nothing failed). Callers that only want "a tray exists" treat it as success and
+        # must never tear anything down for it. 75 = sysexits' EX_TEMPFAIL.
+        sys.exit(EXIT_ALREADY_RUNNING)
 
     # Use theme icon name (installed to ~/.local/share/icons/hicolor).
     # Falls back to file path if theme icon not found, then to "network-server".

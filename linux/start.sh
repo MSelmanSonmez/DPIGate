@@ -779,6 +779,14 @@ if [ "$ENABLE_TRAY" -eq 1 ]; then
     # Log to tray.log for debugging (crash messages, import errors, etc.).
     TRAY_LOG="$DATA_DIR/tray.log"
     : > "$TRAY_LOG"
+    # The tray we killed above may still hold the single-instance lock for a moment.
+    # A tray started into that window would exit as "already running": wait for the
+    # lock to be free first (a tray that never lets go belongs to someone else; the
+    # check below then leaves the session alone instead of tearing it down).
+    for _ in $(seq 1 25); do
+        python3 "$APP_DIR/tray.py" --check-running >/dev/null 2>&1 || break
+        sleep 0.2
+    done
     if [ "$(id -u)" -eq 0 ] && [ "$TRAY_USER" != "root" ]; then
         sudo -u "$TRAY_USER" env "${TRAY_ENV[@]}" \
             nohup python3 "$APP_DIR/tray.py" >>"$TRAY_LOG" 2>&1 &
@@ -790,6 +798,11 @@ if [ "$ENABLE_TRAY" -eq 1 ]; then
     sleep 0.3
     if kill -0 "$TRAY_PID" 2>/dev/null; then
         echo "[start] tray spawned (PID $TRAY_PID)" >&2
+    elif grep -q "already running" "$TRAY_LOG" 2>/dev/null \
+         && python3 "$APP_DIR/tray.py" --check-running >/dev/null 2>&1; then
+        # Not a failure: a tray (another start of DPIGate) is up and owns the session.
+        # Tearing down here would stop THAT session's engine and rules as well.
+        echo "[start] a DPIGate tray is already running; leaving it and the engine alone" >&2
     else
         echo "[start] tray exited immediately — see $TRAY_LOG" >&2
         tail -n 10 "$TRAY_LOG" >&2

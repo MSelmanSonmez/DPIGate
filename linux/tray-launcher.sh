@@ -161,6 +161,18 @@ if [ "${1:-}" = "--check" ]; then
     exit "$_verdict"
 fi
 
+# ── A tray is already running: nothing to do ────────────────────────────────
+# Autostart plus the menu entry plus an installer's own launch can all start this at
+# the same moment. The running tray owns the engine and the firewall rules: starting
+# anything here would restart the engine under it and, if the second tray then exits
+# as "already running", tear the whole session down. tray.py --check-running only
+# looks (a shared lock probe); a tray.py without it exits 2, which is "not running".
+if [ "$PORTABLE" -eq 0 ] && command -v python3 >/dev/null 2>&1 \
+   && python3 "$APP_DIR/tray.py" --check-running >/dev/null 2>&1; then
+    echo "[tray-launcher] a DPIGate tray is already running; nothing to do" >&2
+    exit 0
+fi
+
 # ── Tray precondition probe ─────────────────────────────────────────────────
 # Probe for a working tray stack BEFORE starting the daemon. The daemon's
 # lifetime must be bound to a *visible* tray — if the stack can't render a
