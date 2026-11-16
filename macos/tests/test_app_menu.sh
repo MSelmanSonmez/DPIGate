@@ -1,5 +1,5 @@
 #!/bin/bash
-# Tests for the menu actions of the DPIGate app (Auto Start, Bypass All, DNS, Uninstall, program launch).
+# Tests for the menu actions of the DPIGate app (Auto Start, Bypass All, Only Listed Sites, DNS, Uninstall, program launch).
 # Menu clicks are replaced by DPIGATE_APP_ACTION (one action, then exit). Every system tool is a fake in a
 # temporary directory; no real setting, LaunchAgent or folder is touched. A status item flashes meanwhile.
 set -u
@@ -176,6 +176,46 @@ check "uninstall: app exits 0" '[ $rc = 0 ]'
 check "uninstall: script got SIGINT and restored" 'has_line "$D/calls" "signal INT" && has_line "$D/calls" "^restored"'
 check "uninstall: LaunchAgent removed" '[ ! -e "$D/LA/org.dpigate.menubar.plist" ]'
 check "uninstall: config, state and log folders removed" '[ ! -e "$D/AppSupport/DPIGate" ] && [ ! -e "$D/Logs/DPIGate" ]'
+
+# (f) Only Listed Sites: the proxy gets ByeDPI's host list (-H) plus an empty second group (-An)
+stop_app() { kill -TERM "$APP_PID" 2>/dev/null; wait_for 12 gone "$APP_PID"; APP_PID=; }
+DEFS=":discord.com discord.gg discordapp.com discordapp.net discord.media discordcdn.com"
+F1=$ROOT/f1; mkdir -p "$F1/AppSupport/DPIGate/config"; fake_launchctl "$F1"; make_fake "$F1"
+printf 'bypass_all=0\nsite_mode=1\n' > "$F1/AppSupport/DPIGate/config/config"
+app_env "$F1" DPIGATE_APP_SCRIPT="$F1/fake" DPIGATE_APP_AUTOSTART=1
+wait_for 10 has_line "$F1/calls" "call run"
+check "site mode on: sites.txt created with the Discord defaults" '[ "$(grep -v "^#" "$F1/AppSupport/DPIGate/config/sites.txt" | paste -sd " " -)" = "${DEFS#:}" ]'
+check "site mode on: run gets -- -H <defaults> -An" 'has_line "$F1/calls" "^call run --no-system-proxy -- -H $DEFS -An\$"'
+: > "$F1/calls"
+printf '# my sites\nExample.ORG   # note\n*.sub.example.net\nbad_domain!\n\n' > "$F1/AppSupport/DPIGate/config/sites.txt"
+wait_for 10 has_line "$F1/calls" "call run"
+check "edited site list restarts the proxy with the new list (lowercase, wildcard stripped, invalid and notes dropped)" 'has_line "$F1/calls" "^call run --no-system-proxy -- -H :example.org sub.example.net -An\$"'
+: > "$F1/calls"
+printf '# nothing\n' > "$F1/AppSupport/DPIGate/config/sites.txt"
+wait_for 10 has_line "$F1/calls" "call run"
+check "empty list falls back to a host that never occurs (ByeDPI rejects an empty list)" 'has_line "$F1/calls" "^call run --no-system-proxy -- -H :dpigate.invalid -An\$"'
+stop_app
+
+F2=$ROOT/f2; mkdir -p "$F2/AppSupport/DPIGate/config"; fake_launchctl "$F2"; make_fake "$F2"
+printf 'bypass_all=0\n' > "$F2/AppSupport/DPIGate/config/config"
+app_env "$F2" DPIGATE_APP_SCRIPT="$F2/fake" DPIGATE_APP_AUTOSTART=1 DPIGATE_APP_ACTION=site-toggle
+wait_for 10 has_line "$F2/calls" "^call run --no-system-proxy -- -H"
+check "site mode off by default: first run has no host list" 'has_line "$F2/calls" "^call run --no-system-proxy\$"'
+check "toggling on restarts the proxy with the host list" 'has_line "$F2/calls" "^call run --no-system-proxy -- -H $DEFS -An\$"'
+check "toggle is saved as site_mode=1" 'has_line "$F2/AppSupport/DPIGate/config/config" "^site_mode=1\$" && has_line "$F2/AppSupport/DPIGate/config/config" "^bypass_all=0\$"'
+stop_app
+
+# The real script with the fake proxy: the host list reaches the proxy after --tlsrec 1+s, in the same group
+G=$ROOT/g; mkdir -p "$G/AppSupport/DPIGate/config"; make_fakes "$G"; fake_launchctl_keep "$G"; export FAKE=$G/fake
+echo 8.8.8.8 > "$FAKE/dns"; : > "$FAKE/bypass"; : > "$FAKE/calls.log"
+printf 'bypass_all=0\nsite_mode=1\ndns_index=0\n' > "$G/AppSupport/DPIGate/config/config"
+GPORT=$((20000 + RANDOM % 20000))
+app_env "$G" DPIGATE_APP_SCRIPT="$DPIGATE" DPIGATE_APP_AUTOSTART=1 DPIGATE_PORT=$GPORT PROXY_BIN="$G/proxy" \
+    NETWORKSETUP="$G/networksetup" ROUTE="$G/route" DSCACHEUTIL="$G/dscacheutil" OSASCRIPT="$G/osascript" \
+    RESOLVE_CMD="$G/resolve -q host -a name" DPIGATE_WARMUP_SECS=3 DPIGATE_APP_DNS_CANDIDATES="Good|127.0.0.1|9" LAUNCHCTL="$G/launchctl"
+wait_for 20 has_line "$G/Logs/DPIGate/dpigate.log" "running on"
+stop_app
+check "real script: proxy args are '... --tlsrec 1+s -H <list> -An'" 'grep -q -e "--tlsrec 1+s -H $DEFS -An\$" "$FAKE/proxy_args"'
 
 echo "$PASSED passed, $FAILED failed"
 [ $FAILED -eq 0 ]

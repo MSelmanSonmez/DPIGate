@@ -107,12 +107,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     var measuring = false
     var measuredOnce = false
     var pendingStart = false        // Turn On waits for the first DNS measurement
+    var startedArgs: [String]?      // proxy arguments of the running child (site list)
     var pendingAction: String?      // test hook: run after the child announced itself
 
     let statusLine = NSMenuItem(title: "", action: nil, keyEquivalent: "")
     let toggleItem = NSMenuItem(title: "", action: #selector(toggle), keyEquivalent: "")
     let dnsItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
     let bypassItem = NSMenuItem(title: "Bypass All Traffic", action: #selector(toggleBypass), keyEquivalent: "")
+    let siteItem = NSMenuItem(title: "Only Listed Sites (site list)", action: #selector(toggleSiteMode), keyEquivalent: "")
     let launchItem = NSMenuItem(title: "Launch via DPIGate", action: nil, keyEquivalent: "")
     let autostartItem = NSMenuItem(title: "Auto Start", action: #selector(toggleAutostart), keyEquivalent: "")
 
@@ -130,6 +132,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     var configDir: String { nonEmpty("DPIGATE_CONFIG_DIR") ?? stateDir + "/config" }
     var configFile: String { configDir + "/config" }
     var appsFile: String { configDir + "/apps.txt" }
+    var sitesFile: String { configDir + "/sites.txt" }
     var launchAgentsDir: String { nonEmpty("DPIGATE_LAUNCH_AGENTS_DIR") ?? NSHomeDirectory() + "/Library/LaunchAgents" }
     var agentPath: String { launchAgentsDir + "/" + agentLabel + ".plist" }
     var port: String { nonEmpty("DPIGATE_PORT") ?? "1080" }
@@ -153,6 +156,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     var bypassAll: Bool { (readConfig()["bypass_all"] ?? "1") != "0" }
+    /// "Only Listed Sites": the proxy applies its DPI tricks to the hosts in sites.txt only (default off).
+    var siteMode: Bool { (readConfig()["site_mode"] ?? "0") == "1" }
     var configuredDNSIndex: Int { Int(readConfig()["dns_index"] ?? "") ?? -1 }
 
     func ensureAppsFile() {
@@ -160,6 +165,44 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if !FileManager.default.fileExists(atPath: appsFile) {
             try? "/Applications/Discord.app\n".write(toFile: appsFile, atomically: true, encoding: .utf8)
         }
+    }
+
+    static let defaultSites = ["discord.com", "discord.gg", "discordapp.com", "discordapp.net", "discord.media", "discordcdn.com"]
+
+    func ensureSitesFile() {
+        try? FileManager.default.createDirectory(atPath: configDir, withIntermediateDirectories: true)
+        if !FileManager.default.fileExists(atPath: sitesFile) {
+            let text = "# Domains DPIGate applies its DPI tricks to (Only Listed Sites mode). One per line, # starts a note.\n"
+                + "# A domain also covers its subdomains: discord.com covers cdn.discord.com.\n"
+                + AppDelegate.defaultSites.joined(separator: "\n") + "\n"
+            try? text.write(toFile: sitesFile, atomically: true, encoding: .utf8)
+        }
+    }
+
+    /// Valid, lower-case domains from sites.txt; anything else is skipped.
+    func sites() -> [String] {
+        guard let t = try? String(contentsOfFile: sitesFile, encoding: .utf8) else { return [] }
+        var out: [String] = []
+        for line in t.split(whereSeparator: { $0 == "\n" || $0 == "\r" }) {
+            let body = line.split(separator: "#", maxSplits: 1, omittingEmptySubsequences: false).first ?? ""
+            for word in body.split(whereSeparator: { $0 == " " || $0 == "\t" }) {
+                var d = word.lowercased()
+                if d.hasPrefix("*.") { d.removeFirst(2) }
+                while d.hasPrefix(".") { d.removeFirst() }
+                guard !d.isEmpty, d.allSatisfy({ ($0 >= "a" && $0 <= "z") || ($0 >= "0" && $0 <= "9") || $0 == "-" || $0 == "." }) else { continue }
+                if !out.contains(d) { out.append(d) }
+            }
+        }
+        return out
+    }
+
+    /// Proxy arguments for the current mode. ByeDPI's -H limits the tricks of the first group to the listed
+    /// hosts (subdomains included); -An starts an empty second group, so every other connection passes untouched.
+    /// An empty list would make ByeDPI drop everything, so it falls back to a host that never occurs.
+    func proxyArgs() -> [String] {
+        guard siteMode else { return [] }
+        let list = sites()
+        return ["--", "-H", ":" + (list.isEmpty ? "dpigate.invalid" : list.joined(separator: " ")), "-An"]
     }
 
     func programs() -> [String] {
@@ -172,6 +215,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func applicationDidFinishLaunching(_ n: Notification) {
         NSApp.setActivationPolicy(.accessory)
+        if anotherInstanceRunning() {
+            notify("DPIGate is already running")
+            exit(0)   // touches no setting and no child process
+        }
         try? FileManager.default.createDirectory(
             atPath: (logPath as NSString).deletingLastPathComponent, withIntermediateDirectories: true)
         if !FileManager.default.fileExists(atPath: logPath) {
@@ -180,6 +227,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         logHandle = FileHandle(forWritingAtPath: logPath)
         _ = try? logHandle?.seekToEnd()
         ensureAppsFile()
+        ensureSitesFile()
         if let c = nonEmpty("DPIGATE_APP_DNS_CANDIDATES") {   // test hook: "name|ip|port;name|ip|port"
             candidates = c.split(separator: ";").compactMap {
                 let f = $0.split(separator: "|").map(String.init)
@@ -200,6 +248,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             runBlocking(["restore"])
         }
         runMeasurement()
+        Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in self?.checkSiteListChanged() }
         let action = nonEmpty("DPIGATE_APP_ACTION")
         if env["DPIGATE_APP_AUTOSTART"] == "1" {
             pendingAction = action
@@ -207,6 +256,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         } else if let a = action {
             runAction(a)
         }
+    }
+
+    /// Only one app per user: a held lock file in the state folder (this is what the tests use, each with its own
+    /// STATE_DIR), and, with the default state folder, any other running copy of this bundle.
+    var lockFD: Int32 = -1
+    func anotherInstanceRunning() -> Bool {
+        try? FileManager.default.createDirectory(atPath: stateDir, withIntermediateDirectories: true)
+        lockFD = open(stateDir + "/app.lock", O_CREAT | O_RDWR, 0o600)
+        if lockFD >= 0 && flock(lockFD, LOCK_EX | LOCK_NB) != 0 { return true }
+        if nonEmpty("STATE_DIR") == nil, let bid = Bundle.main.bundleIdentifier {
+            let me = ProcessInfo.processInfo.processIdentifier
+            return NSRunningApplication.runningApplications(withBundleIdentifier: bid).contains { $0.processIdentifier != me }
+        }
+        return false
     }
 
     func installSignalHandlers() {
@@ -243,6 +306,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         m.addItem(launchItem)
         bypassItem.target = self
         m.addItem(bypassItem)
+        siteItem.target = self
+        siteItem.toolTip = "On: DPI tricks only for the sites in the list; everything else passes unchanged. Works with Bypass All (Safari, system-wide) and with Launch via DPIGate."
+        m.addItem(siteItem)
+        let editSites = NSMenuItem(title: "Edit Site List", action: #selector(editSites), keyEquivalent: "")
+        editSites.target = self
+        m.addItem(editSites)
         m.addItem(.separator())
         autostartItem.target = self
         m.addItem(autostartItem)
@@ -266,6 +335,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func refreshDynamicItems() {
         bypassItem.state = bypassAll ? .on : .off
+        siteItem.state = siteMode ? .on : .off
         autostartItem.state = FileManager.default.fileExists(atPath: agentPath) ? .on : .off
         rebuildDNSMenu()
         rebuildLaunchMenu()
@@ -427,6 +497,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if child?.isRunning == true { restartIfActive("bypass mode: \(mode)") } else { notify("Bypass mode: \(mode)") }
     }
 
+    @objc func toggleSiteMode() {
+        let on = !siteMode
+        setConfig("site_mode", on ? "1" : "0")
+        siteItem.state = on ? .on : .off
+        let mode = on ? "only listed sites" : "all sites"
+        if child?.isRunning == true { restartIfActive("tricks for \(mode)") } else { notify("DPI tricks: \(mode)") }
+    }
+
+    @objc func editSites() {
+        ensureSitesFile()
+        openCommand(["-e", sitesFile])
+    }
+
+    /// The list is read when the proxy starts; an edited list restarts a running proxy (checked every 2 s).
+    func checkSiteListChanged() {
+        guard siteMode, state == .running, child?.isRunning == true, let used = startedArgs, used != proxyArgs() else { return }
+        restartIfActive("site list changed")
+    }
+
     // MARK: program filters
 
     func openCommand(_ args: [String]) {
@@ -533,8 +622,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         shutdownBlocking()
         if FileManager.default.fileExists(atPath: stateFile) { runBlocking(["restore"]) }
         setAutostart(false)
-        wipe(configDir, default: defaultStateDir + "/config", files: ["config", "apps.txt"])
-        wipe(stateDir, default: defaultStateDir, files: ["state", "state.tmp"])
+        wipe(configDir, default: defaultStateDir + "/config", files: ["config", "apps.txt", "sites.txt"])
+        wipe(stateDir, default: defaultStateDir, files: ["state", "state.tmp", "app.lock"])
         wipe((logPath as NSString).deletingLastPathComponent, default: (defaultLogPath as NSString).deletingLastPathComponent,
              files: [(logPath as NSString).lastPathComponent])
         // Permanent delete, but only of this app's own bundle (never any other path).
@@ -558,6 +647,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         case "autostart-on": setAutostart(true); finishAction()
         case "autostart-off": setAutostart(false); finishAction()
         case "uninstall": uninstall()
+        case "site-toggle": toggleSiteMode()   // stays running; the test stops the app itself
         case "dns-detect": break   // finishes when the measurement does
         default:
             if a.hasPrefix("launch:") { launchProgram(path: String(a.dropFirst(7))); DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { self.finishAction() } }
@@ -591,7 +681,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         let p = Process()
         p.executableURL = URL(fileURLWithPath: "/bin/bash")
-        p.arguments = [scriptPath, "run"] + (bypassAll ? [] : ["--no-system-proxy"])
+        let extra = proxyArgs()
+        startedArgs = extra
+        p.arguments = [scriptPath, "run"] + (bypassAll ? [] : ["--no-system-proxy"]) + extra
         var e = env
         e["DPIGATE_DNS"] = dnsValue()
         p.environment = e
@@ -619,7 +711,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         p.terminationHandler = { [weak self] proc in
             DispatchQueue.main.async { self?.childExited(gen, status: proc.terminationStatus) }
         }
-        log("app: starting \(scriptPath) run" + (bypassAll ? "" : " --no-system-proxy") + " (DNS \(dnsValue()))")
+        log("app: starting \(scriptPath) run" + (bypassAll ? "" : " --no-system-proxy") + (extra.isEmpty ? "" : " " + extra.joined(separator: " ")) + " (DNS \(dnsValue()))")
         do { try p.run() } catch {
             log("app: cannot start: \(error)")
             notify("Could not start dpigate - see log")

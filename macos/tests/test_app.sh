@@ -91,5 +91,22 @@ check "stale state triggers 'restore'" 'has_line "$C/calls" "call restore"'
 check "restore comes before run" '[ "$(grep -n "call restore" "$C/calls" | head -1 | cut -d: -f1)" -lt "$(grep -n "call run" "$C/calls" | head -1 | cut -d: -f1)" ]'
 kill -TERM "$APP_PID"; wait_for 12 gone "$APP_PID"; APP_PID=
 
+# 4. a second copy with the same state folder leaves at once and touches nothing
+D=$ROOT/d; mkdir -p "$D"; make_fake "$D"
+launch "$D"; FIRST=$APP_PID
+wait_for 10 has_line "$D/calls" "call run"
+env DPIGATE_APP_SCRIPT="$D/fake" DPIGATE_APP_AUTOSTART=1 DPIGATE_APP_LOG="$D/app2.log" \
+    DPIGATE_APP_NOTIFY_LOG="$D/notify" STATE_DIR="$D/state" "$APPBIN" </dev/null >"$D/out2" 2>&1 &
+SECOND=$!
+wait_for 2 gone "$SECOND"
+check "second copy exits within 2s" 'gone "$SECOND"'
+gone "$SECOND" || kill -TERM "$SECOND" 2>/dev/null
+wait "$SECOND" 2>/dev/null; check "second copy exits 0" '[ $? = 0 ]'
+check "second copy says it is already running" 'has_line "$D/notify" "DPIGate is already running"'
+sleep 1
+check "script got run only once" '[ "$(count "$D/calls" "call run")" = 1 ]'
+check "first copy keeps running and was not stopped" 'kill -0 "$FIRST" 2>/dev/null && ! has_line "$D/calls" "signal"'
+kill -TERM "$FIRST"; wait_for 12 gone "$FIRST"; APP_PID=
+
 echo "$PASSED passed, $FAILED failed"
 [ $FAILED -eq 0 ]
