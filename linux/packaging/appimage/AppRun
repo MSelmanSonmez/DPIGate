@@ -509,9 +509,11 @@ portable_refuse_foreign_engine() {
         exit 3
     fi
     for pid in $(plat_gdpi_pids); do
-        argv0="$(tr '\0' '\n' < "/proc/$pid/cmdline" 2>/dev/null | head -n 1)"
+        # The program path is argument 0 (the binary) or, for a script run through its
+        # interpreter, argument 1.
+        argv0="$(tr '\0' '\n' < "/proc/$pid/cmdline" 2>/dev/null | head -n 2 | tr '\n' ' ')"
         case "$argv0" in
-            "$ours_a"*|"$ours_b"*|"$ours_t"*) continue ;;   # left by a dead earlier portable session: taken over
+            "$ours_a"*|"$ours_b"*|"$ours_t"*|*" $ours_a"*|*" $ours_b"*|*" $ours_t"*) continue ;;   # left by a dead earlier portable session: taken over
         esac
         say "ERROR: another goodbyedpi engine is already running (pid $pid, ${argv0:-unknown path})."
         say "       Stop it first (its tray's Exit, 'sudo systemctl stop goodbyedpi', or kill.sh), then try again."
