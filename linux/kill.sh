@@ -99,7 +99,7 @@ if [ "$KILL_PROC" -eq 1 ]; then
         echo "  • goodbyedpi not running."
     fi
     # Remove PID file if present
-    DATA_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/DPIGate"
+    DATA_DIR="${GDPI_DATA_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/DPIGate}"
     rm -f "$DATA_DIR/goodbyedpi.pid" 2>/dev/null || true
     # If setcap failed, daemon may have started as root — user-level kill
     # may be insufficient; escalate with cached root ticket (no re-prompt).
@@ -130,7 +130,7 @@ if [ "$KILL_PROC" -eq 1 ]; then
 fi
 
 # ── Revert DNS override (start.sh changed system DNS upstream) ───
-DATA_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/DPIGate"
+DATA_DIR="${GDPI_DATA_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/DPIGate}"
 if [ -f "$DATA_DIR/dns_override" ] && command -v resolvectl >/dev/null 2>&1; then
     _ovr_if="$(cat "$DATA_DIR/dns_override" 2>/dev/null || true)"
     if [ -n "$_ovr_if" ]; then

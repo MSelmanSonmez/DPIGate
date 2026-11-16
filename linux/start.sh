@@ -62,8 +62,11 @@ die() {
     exit 1
 }
 
-DATA_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/DPIGate"
-CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/DPIGate"
+# GDPI_DATA_DIR / GDPI_CONFIG_DIR move the state and settings directories (the
+# AppImage's run-without-installing mode points them at a root-owned run dir
+# and at <AppImage>.config). Unset, nothing changes.
+DATA_DIR="${GDPI_DATA_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/DPIGate}"
+CONFIG_DIR="${GDPI_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/DPIGate}"
 SETTINGS_FILE="$CONFIG_DIR/settings"
 PID_FILE="$DATA_DIR/goodbyedpi.pid"
 RESTART_MARKER="$DATA_DIR/restart.pid"

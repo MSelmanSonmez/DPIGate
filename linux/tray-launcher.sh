@@ -29,8 +29,8 @@ fi
 # password in its environment. See plat_password_unexport in lib/platform.sh.
 plat_password_unexport
 
-DATA_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/DPIGate"
-CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/DPIGate"
+DATA_DIR="${GDPI_DATA_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/DPIGate}"
+CONFIG_DIR="${GDPI_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/DPIGate}"
 PID_FILE="$DATA_DIR/goodbyedpi.pid"
 PROGRAMS_LIST="$CONFIG_DIR/ProgramFilters"
 SETTINGS_FILE="$CONFIG_DIR/settings"

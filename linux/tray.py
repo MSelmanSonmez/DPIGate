@@ -22,7 +22,8 @@ Launched by start.sh with these env vars:
   GDPI_DNS_LABEL      — "Name addr:port (Xms)"
   GDPI_DNS_CURRENT    — index of current DNS in candidates list
   GDPI_DNS_INFO       — "name|addr|port|ms|status;name|..." (per candidate)
-  GDPI_CONFIG_DIR     — XDG_CONFIG_HOME/DPIGate (systemd unit location)
+  GDPI_CONFIG_DIR     — settings directory (default XDG_CONFIG_HOME/DPIGate)
+  GDPI_DATA_DIR       — state directory with goodbyedpi.pid/.log (default XDG_DATA_HOME/DPIGate)
 """
 import os
 import sys
@@ -147,7 +148,7 @@ GDPI_BYPASS_ALL = os.environ.get("GDPI_BYPASS_ALL", "") == "1"
 # tray-launcher.sh read the same file at startup so the choice survives a
 # restart, a logout and a reboot. A missing or corrupt file degrades to {} —
 # losing a preference must never stop the tray from coming up.
-_CONFIG_DIR = os.path.join(
+_CONFIG_DIR = os.environ.get("GDPI_CONFIG_DIR") or os.path.join(
     os.environ.get("XDG_CONFIG_HOME", os.path.expanduser("~/.config")),
     "DPIGate")
 SETTINGS_FILE = os.path.join(_CONFIG_DIR, "settings")
@@ -378,8 +379,10 @@ KILL_SH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "kill.sh")
 UNINSTALL_SH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "uninstall.sh")
 # goodbyedpi PID file — written by start.sh:start_goodbyedpi, used by the
 # restart poll loop to verify the new daemon is alive before quitting.
-_DATA_DIR = os.environ.get("XDG_DATA_HOME", os.path.expanduser("~/.local/share"))
-PID_FILE = os.path.join(_DATA_DIR, "DPIGate", "goodbyedpi.pid")
+_DATA_DIR = os.environ.get("GDPI_DATA_DIR") or os.path.join(
+    os.environ.get("XDG_DATA_HOME", os.path.expanduser("~/.local/share")),
+    "DPIGate")
+PID_FILE = os.path.join(_DATA_DIR, "goodbyedpi.pid")
 
 
 def kill_goodbyedpi(noprompt=False):
@@ -890,8 +893,7 @@ def check_alive():
     except OSError:
         # ESRCH — no such process. goodbyedpi died → clean up firewall + exit.
         # Read last log lines for debugging (e.g. "nfq_create_queue failed").
-        data_dir = os.environ.get("XDG_DATA_HOME", os.path.expanduser("~/.local/share"))
-        log_path = os.path.join(data_dir, "DPIGate", "goodbyedpi.log")
+        log_path = os.path.join(_DATA_DIR, "goodbyedpi.log")
         log_tail = ""
         try:
             if os.path.exists(log_path):

@@ -29,7 +29,7 @@ esac
 
 # PLAT_STATE_DIR override keeps this testable without root (single state-dir
 # namespace shared with the other scripts).
-DATA_DIR="${PLAT_STATE_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/DPIGate}"
+DATA_DIR="${PLAT_STATE_DIR:-${GDPI_DATA_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/DPIGate}}"
 RESTART_MARKER="$DATA_DIR/restart.pid"
 REAPER_LOG="$DATA_DIR/reaper.log"
 mkdir -p "$DATA_DIR" 2>/dev/null || true
