@@ -53,6 +53,29 @@ domains in a site list.
 
 ---
 
+## Platform differences
+
+macOS support is experimental and does much less than the Windows and Linux
+versions. Windows and Linux run the same packet-level engine; macOS can only
+use a local proxy.
+
+| | Windows | Linux | macOS (experimental) |
+|---|---|---|---|
+| How it works | GoodbyeDPI engine, packet level (WinDivert) | Same engine, packet level (NFQUEUE) | ByeDPI SOCKS5/HTTP proxy, set as the system proxy |
+| Which traffic | Programs in the filter list | Programs in the filter list | Only apps that follow the system proxy (Firefox needs "Use system proxy settings") |
+| Per-program filter list | Yes | Yes | No |
+| Bypass All Traffic | Yes | Yes | No (the system proxy is always on while DPIGate runs) |
+| Choosing what gets the bypass | Filter list of programs | Filter list of programs | Site list (Only Listed Sites) |
+| Fake packets, TTL tricks | Yes | Yes | No |
+| DNS auto-detection | Yes | Yes | Yes |
+
+On macOS, also keep in mind: it has been tested only on an Intel Mac with macOS 13 (Apple
+Silicon is untested), every start of the proxy asks for the administrator password, after
+switching between Wi-Fi and Ethernet you need to turn DPIGate off and on again, and the app
+is not notarized. The full list is in [Known limitations](#known-limitations).
+
+---
+
 ## Quick start
 
 ### Windows
