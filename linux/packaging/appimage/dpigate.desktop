@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=DPIGate
+Comment=DPI bypass with per-program filtering
+Exec=AppRun %U
+Icon=dpigate
+Terminal=false
+Categories=Network;
