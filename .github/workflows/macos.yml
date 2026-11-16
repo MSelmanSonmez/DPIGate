@@ -4,10 +4,12 @@ on:
   push:
     paths:
       - "macos/**"
+      - "docs/icon.png"
       - ".github/workflows/macos.yml"
   pull_request:
     paths:
       - "macos/**"
+      - "docs/icon.png"
       - ".github/workflows/macos.yml"
   workflow_dispatch:
 
@@ -21,7 +23,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-13, macos-14]
+        os: [macos-15-intel, macos-15]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
