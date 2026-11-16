@@ -294,6 +294,12 @@ _plat_pkg_install() {
 plat_deps_check() {
     local ok=0
     local cc=""
+    # PLAT_DEPS_RUNTIME_ONLY=1: the caller ships a prebuilt binary (install.sh
+    # --no-build), so the compiler, make and the development headers are not
+    # required. The runtime probes at the end still run.
+    local build_probe=1
+    [ "${PLAT_DEPS_RUNTIME_ONLY:-0}" = "1" ] && build_probe=0
+    if [ "$build_probe" -eq 1 ]; then
     if command -v cc >/dev/null 2>&1; then cc=cc
     elif command -v gcc >/dev/null 2>&1; then cc=gcc
     elif command -v clang >/dev/null 2>&1; then cc=clang
@@ -345,6 +351,7 @@ EOF
             rm -rf "$tmpd"
         fi
     fi
+    fi   # build_probe
 
     if ! command -v setcap >/dev/null 2>&1; then echo "missing: setcap (libcap)"; ok=1; fi
     if ! command -v nft >/dev/null 2>&1 && ! command -v iptables >/dev/null 2>&1; then

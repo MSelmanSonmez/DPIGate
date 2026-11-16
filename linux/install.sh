@@ -204,9 +204,16 @@ echo "[install] distro: $(plat_distro)  pkgmgr: $(plat_pkgmgr)  init: $(plat_ini
 # Probe capabilities (never package names) and auto-install what's missing.
 # plat_deps_install re-probes afterwards, so a package manager that "succeeded"
 # without actually providing a compiler fails here instead of at `make`.
+# --no-build: the binary is prebuilt, so only the runtime tools are needed
+# (no compiler, make or development headers). The build path is unchanged.
+_deps_role=all
+if [ "$DO_BUILD" -eq 0 ]; then
+    export PLAT_DEPS_RUNTIME_ONLY=1
+    _deps_role=runtime
+fi
 if [ "$ASSUME_DEPS" -ne 1 ] && ! plat_deps_check; then
     _deps_rc=0
-    plat_deps_install all || _deps_rc=$?
+    plat_deps_install "$_deps_role" || _deps_rc=$?
     if [ "$_deps_rc" -eq 2 ]; then
         echo "[install] Password prompt cancelled. Install aborted - nothing was changed." >&2
         notify-send -a "DPIGate" -i dialog-warning "DPIGate" \
