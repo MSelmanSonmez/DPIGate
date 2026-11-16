@@ -176,11 +176,11 @@ The app is built as a universal binary (Intel and Apple Silicon), but only Intel
 | **Open Log** | Opens the log |
 | **Exit** | Stops the proxy and restores your settings |
 
-Turn Off and Exit send the script Ctrl-C, so your settings are restored; if it dies on its own the app restarts it (up to 3 times a minute).
+If the app itself is killed (`kill -9`, a crash), the proxy keeps running; the next launch stops that leftover run, which restores your settings, and starts fresh. Turn Off and Exit send the script Ctrl-C, so your settings are restored; if it dies on its own the app restarts it (up to 3 times a minute).
 
 ### Uninstall
 
-Use the menu item. If you cannot open the app, run `./uninstall.sh` (from the unpacked zip or `macos/`; `--yes` skips the question). It quits when DPIGate is running, restores a saved state, and deletes the app, its Auto Start entry and its settings.
+Use the menu item. If your saved network settings cannot be restored, Uninstall stops, tells you, and deletes nothing, so you can try again or run `dpigate restore`. If you cannot open the app, run `./uninstall.sh` (from the unpacked zip or `macos/`; `--yes` skips the question). It quits when DPIGate is running, restores a saved state, and deletes the app, its Auto Start entry and its settings.
 
 ### Command line
 
