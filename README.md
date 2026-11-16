@@ -136,7 +136,7 @@ refuses to start rather than leave you debugging a bypass that cannot work;
 
 ## macOS (experimental)
 
-A menu bar app around a SOCKS5 proxy built on [ByeDPI](https://github.com/hufrea/byedpi). The packet-level tricks used on Windows and Linux (fake packets, TTL games) are not available on macOS, so only apps that honor the system proxy, or that you start via DPIGate, are covered. Safari needs Bypass All on (see below).
+A menu bar app around a SOCKS5 proxy built on [ByeDPI](https://github.com/hufrea/byedpi). The packet-level tricks used on Windows and Linux (fake packets, TTL games) are not available on macOS, so only apps that honor the system proxy are covered. While DPIGate is on, the system proxy is always set. Safari and Chromium-based browsers follow it by default; Firefox must use "Use system proxy settings" (Settings → Network Settings), because with "No proxy" it bypasses DPIGate.
 
 ### Install
 
@@ -161,10 +161,7 @@ The app is universal (Intel and Apple Silicon), ad-hoc signed and not notarized,
 |---|---|
 | **Turn On / Turn Off** | Starts the proxy, sets DNS, flushes the DNS cache and points the system proxies at it, or undoes all of that. macOS may ask for an administrator password when settings change |
 | **DNS: …** | Candidate servers, measured in the background; pick one or Auto-detect |
-| **Bypass All Traffic** | On = system-wide through the system proxy. Off = only the proxy runs; system proxy settings and `launchctl` stay untouched, and programs started via Launch via DPIGate use it |
-| **Launch via DPIGate** | Starts a program from Edit Program Filters with the proxy |
-| **Edit Program Filters** | Opens `apps.txt` in a text editor |
-| **Only Listed Sites** | Applies the DPI tricks only to the domains in `sites.txt` (subdomains included; defaults to Discord's domains; off by default) and passes every other connection through unchanged. With Bypass All on it works system-wide, so Safari gets the tricks only for listed sites; with Bypass All off it applies to programs started via Launch via DPIGate |
+| **Only Listed Sites** | Applies the DPI tricks only to the domains in `sites.txt` (subdomains included; defaults to Discord's domains; off by default) and passes every other connection through unchanged |
 | **Edit Site List** | Opens `sites.txt`; edits restart a running proxy within 2 seconds. New on macOS: the Linux tray has no such item (there the program filter does this job) |
 | **Auto Start** | Toggle. A LaunchAgent starts the app at login; if you move the app, the entry is updated the next time it launches |
 | **Uninstall** | Restores your settings and permanently deletes the app and its settings |
@@ -199,7 +196,6 @@ The proxy resolves names itself (UDP DNS to 1.1.1.1, then 1.0.0.1, 1 s timeout, 
 |---|---|
 | Settings | `~/Library/Application Support/DPIGate/config` |
 | Site list | `sites.txt`, next to `config` |
-| Program filters | `apps.txt`, next to `config` |
 | Saved settings (while running) | `~/Library/Application Support/DPIGate/state` |
 | Log | `~/Library/Logs/DPIGate/dpigate.log` |
 | Auto Start entry | `~/Library/LaunchAgents/org.dpigate.menubar.plist` |
